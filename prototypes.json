@@ -1,0 +1,36 @@
+{"TES4":[
+	["HEDR", [
+		"data_size|H",
+		"version|f", 
+		"numRecords|i",
+		"nextObjectId|L"
+		]
+	], 
+	["CNAM", "author|Z"], 
+	["SNAM", "description|Z"], 
+	["MAST", "master|Z"], 
+	["DATA", ["data_size|H", "fileSize|Q"], "2"], 
+	["INTV", "unknown1|Z"]
+], 
+"NPC_":[
+	["EDID", "Editor ID|Z"], 
+	["OBND", ["data_size|H", "x1|h", "y1|h", "z1|h", "x2|h", "y2|h", "z2|h"]], 
+	["ACBS", [
+		"flags|I",
+		"XP Value Offset|H", 
+		"Other ?|H", 
+		"Level|H", 
+		"Calc min level|H",
+		"Calc max level|H",
+		"Speed Multiplier|H",
+		"Disposition Base|H",
+		"Bleedout Override|H",
+		"Template Data Flags|H"
+		
+	]],
+	["SNAM", ["data_size|H", "Faction form ID|i", "rank|b"], "1"],
+	["VTCK", ["data_size|H", "Voice Type form ID (VTYP)|i"]], 
+	["TPLT", ["data_size|H", "Base Template form ID (NPC_ or LVLN)|i"]]
+],
+"CELL":"TODO",
+"GRUP":"TODO"}
