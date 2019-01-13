@@ -27,14 +27,25 @@ def readULong(f):
 	
 def readFloat(f):
 	return struct.unpack("f", f.read(4))[0]
-
+	
 def readString(f, size):
 	return f.read(size).decode("utf-8")
 
 def readFromBytes(data_type, data): 
-	if data_type == "Z": 
+	try: 
+		return data.read(int(data_type))
+	except: 
+		pass
+	
+	if data_type == "Z": # Z String
 		data_size = readU16(data)
-		return readString(data, data_size)[:-1]
+		return data.read(data_size).decode("utf-8")[:-1]
+	elif data_type == "z": # Z bytes
+		data_size = readU16(data)
+		return data.read(data_size)
+	elif data_type == "O": 
+		data_size = readU16(data) 
+		return struct.unpack("i", data.read(4))[0] # form ID - always Int32
 	elif data_type == "b" or data_type == "B": 
 		return struct.unpack(data_type, data.read(1))[0]
 	elif data_type == "h" or data_type == "H": 
@@ -53,37 +64,55 @@ class Record():
 		self.detail = dict()
 
 	def read_metainfo(self, f): 
+		#print(f.read(68))
+		#f.seek(-68, 1)
 		self.type = readString(f, 4)
 		self.data_size = readU32(f)
-		self.flags = readU32(f)
-		self.id = readU32(f)
+		if self.type == "GRUP": 
+			self.label = f.read(4)
+			self.group_type = readU32(f)
+			if self.group_type == 0: 
+				self.label = self.label.decode("utf-8")
+			elif self.group_type == 2 or self.group_type == 3 or self.group_type == 6: 
+				self.label = int(struct.unpack("I", self.label)[0])
+				
+		else: 
+			self.flags = readU32(f)
+			self.id = readU32(f)
 		self.rev = readU32(f)
 		self.version = readU16(f)
 		self.unknown = readU16(f)
+		return 24
 	
 	def read_data(self, f): 
 		if self.type == "GRUP": 
 			self.raw_data = f.read(self.data_size - 24)
+			return self.data_size - 24
 		elif self.type == "NPC_" or self.type == "CELL": 
 			# TODO - is compressed ?? - how many bytes to read ??? 
-			self.data_size = readU32(f) 
-			print("NPC_ - read %d bytes of compressed data" % self.data_size)
-			self.compressed_data = f.read(self.data_size)
+			self.compressed_data_size = readU32(f) 
+			print("%s - read %d bytes of compressed data" % (self.type, self.compressed_data_size))
+			self.compressed_data = f.read(self.data_size - 4)
 			self.raw_data = zlib.decompress(self.compressed_data)
+			#print("end of compressed data")
+			#print(self.compressed_data[-20:])
+			return self.data_size - 4
 		else: 
 			self.raw_data = f.read(self.data_size)
+			return self.data_size
 		
 	def read(self, f): 
-		self.read_metainfo(f)
-		self.read_data(f)
-		print("read %s - %d bytes" % (self.type, self.data_size))
+		read_bytes = self.read_metainfo(f)
+		read_bytes+= self.read_data(f)
+		#print("read %s - %d bytes" % (self.type, self.data_size))
+		return read_bytes
 
-	def analyze_data(self, prototypes): 
-		print("analyze data for %s" % self.type)
+	def analyze_data(self, prototypes, lvl): 
 		if self.type == "GRUP": 
-			self.analyzeGRUP(prototypes)
+			self.analyzeGRUP(prototypes, lvl)
 			return
 
+		print("%sanalyze data for %s" % ("\t"*lvl, self.type))
 		sub_records = prototypes[self.type]
 		#print(sub_records)
 		data = io.BytesIO(self.raw_data)
@@ -95,10 +124,11 @@ class Record():
 
 			if index >= len(sub_records): 
 				#print(self.detail)
-				#print(data.read(20))
+				#
 				#raise Exception("REMAINING DATA not in prototype")
 				print("REMAINING DATA not in prototype: ")
-				print(self.raw_data)
+				print(data.read(24))
+				#print(self.raw_data)
 				break
 				
 			sub_record = sub_records[index]
@@ -111,6 +141,7 @@ class Record():
 
 			sr = dict()
 			sr["type"] = type
+
 			# we've got the good sub_record
 			if isiterable(sub_record[1]): 
 				# complex struct
@@ -134,43 +165,31 @@ class Record():
 					i += 1
 				name = name + str(i)
 			
-			print("data analyzed: %s" % sr)
+			#print("data analyzed: %s" % sr)
 			self.detail[name] = sr
 			
-	def analyzeGRUP(self, prototypes): 
+	def analyzeGRUP(self, prototypes, lvl): 
 		sub_records = []
-		b = io.BytesIO(self.raw_data)
 		
+		print("%sanalyze GRUP of size %d - label %s - type %d" % ("\t"*lvl, self.data_size, self.label, self.group_type))
+		if self.group_type == 0: 
+			print("%s type #0 - Top group of %s" % ("\t"*lvl, self.label))
+		elif self.group_type == 2: 
+			print("%s type #2 - Interior cell block, block number %d" % ("\t"*lvl, self.label))
+		elif self.group_type == 3: 
+			print("%s type #3 - Interior cell sub-block, sub-block number %d" % ("\t"*lvl, self.label))
+		elif self.group_type == 6:
+			print("%s CELL children of CELL ID %d" % ("\t"*lvl, self.label))
+		b = io.BytesIO(self.raw_data)
+		read_bytes_len = 0
 		while b.read(1): 
 			b.seek(-1, 1)
 			r = Record()
-			r.read(b)
-			print("read a sub group record %s" % r.type)
-			r.analyze_data(prototypes)
+			read_bytes_len += r.read(b)
+			print("%sread a sub group record %s of size %d" % ("\t"*lvl, r.type, r.data_size))
+			#print("%sbytes remaining: %d " % ("\t"*lvl, len(self.raw_data) - read_bytes_len))
+			r.analyze_data(prototypes, lvl+1)
 			sub_records.append(r)
-		#print(prototypes)
-		
-		
-	def check_type(self, f): 
-		found_type = readString(f, 4)
-		if self.type != found_type: 
-			raise Exception("READ_RECORD_WRONG_TYPE", "expected: %s, found: %s" % (self.type, found_type))
-	
-	def read_record(self, record, f): 
-		try: 
-			record.read(f)
-			return record
-		except Exception: 
-			if record.optional: 
-				f.seek(-4, 1)
-				return None
-			else: 
-				raise
-	
-	def read_new_record(self, f): 
-		type = readString(f, 4)
-		data_size = readU16(f)
-		
 		
 	def pretty_print(self, tabs): 
 		s = "\t" * tabs + "Record %s: \n" % self.type
@@ -182,8 +201,10 @@ class Record():
 					if isinstance(r, tuple): 
 						s += r[0].pretty_print(tabs + 1)
 						s += r[1].pretty_print(tabs + 1)
-					else: 
+					elif isinstance(r, Record): 
 						s += r.pretty_print(tabs + 1)
+					else: 
+						s += ("\t" * (tabs+1) + "%s= %s\n" % (k, v))
 				s += ("\t" * tabs + "]\n")
 			elif isinstance(v, Record): 
 				s += v.pretty_print(tabs)
@@ -196,184 +217,4 @@ class Record():
 		for k, v in self.__dict__.items():
 			s += ("%s= %s\n" % (k, v))
 		return s
-
-class StringRecord(Record): 
-	def __init__(self, type, optional):
-		self.type = type
-		self.optional = optional
-		self.data_size = 0
-		self.data = None
-	
-	def read(self, f): 
-		self.check_type(f)
-		self.data_size = readU16(f)
-		self.data = readString(f, self.data_size)
-		return self
-		
-class GRUP(Record): 
-	def __init__(self):
-		self.type = "GRUP"
-		self.optional = True
-		self.groupSize = -1
-		self.label = ""
-		self.groupType = -1
-		self.stamp = -1
-		self.unknown = -1
-		self.version = -1
-		self.unknown2 = -1
-		self.data = None
-	
-	def read(self, f): 
-		self.check_type(f)
-		self.groupSize = readU32(f)
-		self.label = str(f.read(4))
-		self.groupType = read32(f)
-		self.stamp = readU16(f)
-		self.unknown = readU16(f)
-		self.version = readU16(f)
-		self.unknown2 = readU16(f)
-		self.data = None # uint8[groupSize-24]
-		
-		return self
-
-
-class NPC_(Record): 
-	def __init__(self):
-		self.type = "NPC_"
-		self.optional = True
-		
-	def read(self, f): 
-		self.check_type(f)
-		self.data_size = readU16(f)
-		self.flags = readU32(f)
-		self.id = readU32(f)
-		self.rev = readU32(f)
-		self.version = readU16(f)
-		self.unknown = readU16(f)
-		self.something = readU16(f)
-		self.decomp_size = readU32(f)
-		data = f.read(self.data_size-4)
-		
-		#print(f.read(4))
-		
-		#print(zlib.decompress(data))
-		
-		read_size = 0
-
-		self.srEDID = self.EDID()
-		self.srEDID = self.read_record(self.srEDID, f)
-		# read_size += self.srEDID.data_size + 6		
-		return self
-
-	class EDID(StringRecord): 
-		def __init__(self): 
-			StringRecord.__init__(self, "EDID", True)
-			
-class CELL(Record): 
-	def __init__(self):
-		self.type = "CELL"
-		self.optional = True
-	
-	def read(self, f): 
-		self.check_type(f)
-		self.data_size = readU16(f)
-		self.flags = readU32(f)
-		self.id = readU32(f)
-		self.rev = readU32(f)
-		self.version = readU16(f)
-		self.unknown = readU16(f)
-		self.something = readU16(f)
-		self.decomp_size = readU32(f)
-		data = f.read(self.data_size-4)
-		
-		print(zlib.decompress(data))
-		
-		return self
-			
-class RecordBuilder(): 
-	def __init__(self, esp_file):
-		self.file = esp_file
-		
-	def read(self): 
-		record = TES4()
-		r = record.read(self.file)
-		print(r.pretty_print(0))
-		
-		record = GRUP()
-		r = record.read(self.file)
-		print(r.pretty_print(0))
-
-		record = NPC_()
-		r = record.read(self.file)
-		print(r.pretty_print(0))
-
-		record = NPC_()
-		r = record.read(self.file)
-		print(r.pretty_print(0))
-		
-		record = GRUP()
-		r = record.read(self.file)
-		print(r.pretty_print(0))
-		
-		record = GRUP()
-		r = record.read(self.file)
-		print(r.pretty_print(0))
-		
-		record = GRUP()
-		r = record.read(self.file)
-		print(r.pretty_print(0))
-		
-		record = CELL()
-		r = record.read(self.file)
-		print(r.pretty_print(0))
-
-		record = GRUP()
-		r = record.read(self.file)
-		print(r.pretty_print(0))
-
-		record = GRUP()
-		r = record.read(self.file)
-		print(r.pretty_print(0))
-		
-		print("next is %s" % self.file.read(4))
-		
-		
-		
-	def read_record(self, f): 
-		module = __import__(module_name)
-		class_ = getattr(module, type)
-		r = class_()
-		r.data_size = readU32(f)
-		r.flags = record.readU32(f)
-		r.id = readU32(f)
-		r.rev = readU32(f)
-		r.version = readU16(f)
-		r.unknown = readU16(f)
-		
-		sub_records = r.get_sr_def()
-	
-	
-		print("# HEDR	header	struct")
-		# HEDR	header	struct
-		r = esp_file.read(4)
-		print(r)
-		r = esp_file.read(2)
-		print(r)
-		# version	float	0.94 in most files; 1.7 in recent versions of Update.esm.
-		r = record.readFloat(esp_file)
-		print(r)
-
-		# numRecords	int32	Number of records and groups (not including TES4 record itself).
-		r = record.read32(esp_file)
-		print(r)
-
-		# nextObjectId	ulong	Next available object ID.
-		r = record.readULong(esp_file)
-		print(r)
-		
-		
-		cname = esp_file.read(4)
-		print(cname)
-		author = esp_file.read(48)
-		print(author)
 

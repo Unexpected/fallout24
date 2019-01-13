@@ -9,7 +9,7 @@
 	["CNAM", "author|Z"], 
 	["SNAM", "description|Z"], 
 	["MAST", "master|Z"], 
-	["DATA", ["data_size|H", "fileSize|Q"], "2"], 
+	["DATA", ["data_size|H", "fileSize|Q"], "1"], 
 	["INTV", "unknown1|Z"]
 ], 
 "NPC_":[
@@ -28,9 +28,60 @@
 		"Template Data Flags|H"
 		
 	]],
-	["SNAM", ["data_size|H", "Faction form ID|i", "rank|b"], "1"],
-	["VTCK", ["data_size|H", "Voice Type form ID (VTYP)|i"]], 
-	["TPLT", ["data_size|H", "Base Template form ID (NPC_ or LVLN)|i"]]
+	["SNAM", ["data_size|H", "Faction form ID|i", "rank|b"]],
+	["VTCK", "Voice Type (VTYP)|O"], 
+	["TPLT", "Base Template (NPC_ or LVLN)|O"],
+	["TPTA", ["data_size|H", "unknown|52"]], 
+	["RNAM", "Race|O"], 
+	["ATKR", "Attack Race|O"], 
+	["PRPS", "unknown|z"], 
+	["COCT", ["data_size|H", "Count of Container|I"]], 
+	["CNTO", ["Any item (WEAP/ARMO/ALCH)|O", "count|I"]], 
+	["AIDT", "26 byte struct|26"], 
+	["PKID", "AI Package|O"], 
+	["KSIZ", ["data_size|H", "Keyword Count|I"]], 
+	["KWDA", ["Keyword Data|10"]], 
+	["CNAM", "Class (CLAS)|O"], 
+	["DATA", "data_size|H"], 
+	["DNAM", "skillsOrSomething|z"], 
+	["PNAM", "Head Part addons (hair, eyes, scars, etc) from HDPT|O"], 
+	["HCLF", "Hair Color(CLFM)|O"], 
+	["NAM5", ["data_size|H", "value|h"]], 
+	["NAM6", ["data_size|H", "value|I"]],
+	["NAM4", ["data_size|H", "value|I"]],
+	["MWGT", "unknown|z"], 
+	["NAM8", ["data_size|H", "value|i"]], 
+	["DOFT", "Default Outfit (OTFT)|O"],
+	["FTST", "Face complexion (TXST)|O"], 
+	["QNAM", "Skin Tone|z"], 
+	["MSDK", "unknown|z"], 
+	["MSDV", "unknown|z"], 
+	["FMRI", "unknown|z"], 
+	["FMRS", "unknown|z", "1"]
 ],
-"CELL":"TODO",
+"CELL":[
+	["EDID", "Editor ID|Z"], 
+	["FULL", "In game name of the cell|Z"],
+	["DATA", ["data_size|H", "flags|h"]], 
+	["VISI", ["data_size|H", "flags|h"]], 
+	["PCMB", ["data_size|H", "flags|h"]], 
+	["XCLL", "flags|z"], 
+	["LTMP", "LightingTemplate|O"], 
+	["XCLW", ["data_size|H", "Non-ocean water-height|f"]],
+	["XCIM", "Image Space|O"],  
+	["XCMO", "xcmo_form_id?|O"], 
+	["XCCM", "xccm_form_id?|O"],
+	["XCAS", "xcas_form_id?|O"], 
+	["XCRI", "flags|z"]
+],
+"REFR": [
+	["EDID", "Editor ID|Z"], 
+	["NAME", "Object form ID|O"], 
+	["DATA", "Location Data|z"]
+],
+"ACHR": [
+	["EDID", "Editor ID|Z"], 
+	["NAME", "Object form ID|O"], 
+	["DATA", "Location Data|z"]
+],
 "GRUP":"TODO"}

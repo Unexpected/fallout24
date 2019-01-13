@@ -1,6 +1,7 @@
 import sys, traceback, struct
 import record
 import json
+import yaml
 
 # global paths/flags
 ESP_FILE = None
@@ -37,9 +38,9 @@ def main():
 		print("-------- start analyze --------")
 		
 		for r in records: 
-			r.analyze_data(prototypes)
-			print(r.detail)
-			
+			r.analyze_data(prototypes, 0)
+			#print(r.pretty_print(0))
+		
 	except Exception:
 		traceback.print_exc()
 
