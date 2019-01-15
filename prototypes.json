@@ -34,7 +34,7 @@
 	["TPTA", ["data_size|H", "unknown|52"]], 
 	["RNAM", "Race|O"], 
 	["ATKR", "Attack Race|O"], 
-	["PRPS", "unknown|z"], 
+	["PRPS", "unknown|X"], 
 	["COCT", ["data_size|H", "Count of Container|I"]], 
 	["CNTO", ["Any item (WEAP/ARMO/ALCH)|O", "count|I"]], 
 	["AIDT", "26 byte struct|26"], 
@@ -43,21 +43,21 @@
 	["KWDA", ["Keyword Data|10"]], 
 	["CNAM", "Class (CLAS)|O"], 
 	["DATA", "data_size|H"], 
-	["DNAM", "skillsOrSomething|z"], 
+	["DNAM", "skillsOrSomething|X"], 
 	["PNAM", "Head Part addons (hair, eyes, scars, etc) from HDPT|O"], 
 	["HCLF", "Hair Color(CLFM)|O"], 
 	["NAM5", ["data_size|H", "value|h"]], 
 	["NAM6", ["data_size|H", "value|I"]],
 	["NAM4", ["data_size|H", "value|I"]],
-	["MWGT", "unknown|z"], 
+	["MWGT", "unknown|X"], 
 	["NAM8", ["data_size|H", "value|i"]], 
 	["DOFT", "Default Outfit (OTFT)|O"],
 	["FTST", "Face complexion (TXST)|O"], 
-	["QNAM", "Skin Tone|z"], 
-	["MSDK", "unknown|z"], 
-	["MSDV", "unknown|z"], 
-	["FMRI", "unknown|z"], 
-	["FMRS", "unknown|z", "1"]
+	["QNAM", "Skin Tone|X"], 
+	["MSDK", "unknown|X"], 
+	["MSDV", "unknown|X"], 
+	["FMRI", "unknown|X"], 
+	["FMRS", "unknown|X", "1"]
 ],
 "CELL":[
 	["EDID", "Editor ID|Z"], 
@@ -65,23 +65,23 @@
 	["DATA", ["data_size|H", "flags|h"]], 
 	["VISI", ["data_size|H", "flags|h"]], 
 	["PCMB", ["data_size|H", "flags|h"]], 
-	["XCLL", "flags|z"], 
+	["XCLL", "flags|X"], 
 	["LTMP", "LightingTemplate|O"], 
 	["XCLW", ["data_size|H", "Non-ocean water-height|f"]],
 	["XCIM", "Image Space|O"],  
 	["XCMO", "xcmo_form_id?|O"], 
 	["XCCM", "xccm_form_id?|O"],
 	["XCAS", "xcas_form_id?|O"], 
-	["XCRI", "flags|z"]
+	["XCRI", "flags|X"]
 ],
 "REFR": [
 	["EDID", "Editor ID|Z"], 
 	["NAME", "Object form ID|O"], 
-	["DATA", "Location Data|z"]
+	["DATA", "Location Data|X"]
 ],
 "ACHR": [
 	["EDID", "Editor ID|Z"], 
 	["NAME", "Object form ID|O"], 
-	["DATA", "Location Data|z"]
+	["DATA", "Location Data|X"]
 ],
 "GRUP":"TODO"}

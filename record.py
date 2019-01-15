@@ -1,60 +1,87 @@
 import struct, collections, zlib, io
 
-# reading methods, parameter f is a file opened in binary mode
-def read8(f):
-	return struct.unpack("b", f.read(1))[0]
+UINT_LENGTH = dict()
+UINT_LENGTH[1] = "B"
+UINT_LENGTH[2] = "H"
+UINT_LENGTH[4] = "I"
+UINT_LENGTH[8] = "Q"
 
-def readU8(f):
-	return struct.unpack("B", f.read(1))[0]
+VARIABLE_LENGTH_TYPES = { "O", "N", "X", "Z" }
 
-def read16(f):
-	return struct.unpack("h", f.read(2))[0]
+def read_fixed_size(data_size, data_type, data): 
+	""" This methods reads a fixed size from a byte stream and returns length of data read + data read formatted according to parameters 
+	data_types: 
+		"X": read byte array
+		"W": read UTF-8 word 
+		"Z": read UTF-8 string ending with \x00
+		something else: return struct.unpack data with data_type used as parameter	
+	"""
+	if data_type == "X": 
+		return data_size, data.read(data_size)
+	elif data_type == "Z": 
+		return data_size, data.read(data_size).decode("utf-8")
+	return data_size, struct.unpack(data_type, data.read(data_size))[0]
 
-def readU16(f):
-	return struct.unpack("H", f.read(2))[0]
-
-def read32(f):
-	return struct.unpack("i", f.read(4))[0]
-
-def readU32(f):
-	return struct.unpack("I", f.read(4))[0]
-
-def readU64(f):
-	return struct.unpack("Q", f.read(8))[0]
-
-def readULong(f):
-	return struct.unpack("L", f.read(4))[0]
+def read_variable_size(data_type, data): 
+	""" This method reads from a byte stream and returns length of data read + data read formatted according to parameters 
+	data_types: 
+		b / B: int8 / uint8 (1 byte)
+		h / H: int16 / uint16 (2 bytes)
+		i / I: int32 / uint32 (4 bytes)
+		l / L / f: long / ULong / float (4 bytes each)
+		Q: unsigned long long (8 bytes)
+		O: Form ID with uint16 + int32
+		N: Variable unsigned integer with uint16 as length + uint[length]
+		Z: variable size string with uint16 as str_len + utf-8 string of size str_len
+		X: variable size byte struct with uint16 as bytes_len + byte array of size bytes_len
+		integer n: temp hack for weird structures - read and return n bytes
+	"""
 	
-def readFloat(f):
-	return struct.unpack("f", f.read(4))[0]
-	
-def readString(f, size):
-	return f.read(size).decode("utf-8")
-
-def readFromBytes(data_type, data): 
 	try: 
-		return data.read(int(data_type))
+		return int(data_type), data.read(int(data_type))
 	except: 
 		pass
-	
-	if data_type == "Z": # Z String
+
+	data_size = 0
+	if data_type in VARIABLE_LENGTH_TYPES: 
 		data_size = readU16(data)
-		return data.read(data_size).decode("utf-8")[:-1]
-	elif data_type == "z": # Z bytes
-		data_size = readU16(data)
-		return data.read(data_size)
-	elif data_type == "O": 
-		data_size = readU16(data) 
-		return struct.unpack("i", data.read(4))[0] # form ID - always Int32
+		if data_type == "N": 
+			data_type = UINT_LENGTH[data_size]
+		elif data_type == "O": 
+			data_type = "i"
+			data_size = 4
 	elif data_type == "b" or data_type == "B": 
-		return struct.unpack(data_type, data.read(1))[0]
+		data_size = 1
 	elif data_type == "h" or data_type == "H": 
-		return struct.unpack(data_type, data.read(2))[0]
-	elif data_type == "i" or data_type == "I" or data_type == "L" or data_type == "f": 
-		return struct.unpack(data_type, data.read(4))[0]
+		data_size = 2
+	elif data_type == "i" or data_type == "I" or data_type == "L" or data_type == "f":
+		data_size = 4
 	elif data_type == "Q": 
-		return struct.unpack(data_type, data.read(8))[0]
-		
+		data_size = 8
+
+	return read_fixed_size(data_size, data_type, data)
+
+def read8(f):
+	return read_fixed_size(1, "b", f)[1]
+
+def readU8(f):
+    return read_fixed_size(1, "B", f)[1]
+
+def read16(f):
+	return read_fixed_size(2, "h", f)[1]
+
+def readU16(f):
+	return read_fixed_size(2, "H", f)[1]
+
+def read32(f):
+	return read_fixed_size(4, "i", f)[1]
+
+def readU32(f):
+	return read_fixed_size(4, "I", f)[1]
+
+def readString(f, size):
+	return read_fixed_size(size, "Z", f)[1]
+	
 def isiterable(value): 
 	return isinstance(value, collections.Iterable) and not isinstance(value, str)
 	
@@ -66,11 +93,17 @@ class Record():
 	def read_metainfo(self, f): 
 		#print(f.read(68))
 		#f.seek(-68, 1)
+		read_size = 0
 		self.type = readString(f, 4)
+		read_size += 4
 		self.data_size = readU32(f)
+		read_size += 4
+		
 		if self.type == "GRUP": 
 			self.label = f.read(4)
+			read_size += 4
 			self.group_type = readU32(f)
+			read_size += 4
 			if self.group_type == 0: 
 				self.label = self.label.decode("utf-8")
 			elif self.group_type == 2 or self.group_type == 3 or self.group_type == 6: 
@@ -78,20 +111,30 @@ class Record():
 				
 		else: 
 			self.flags = readU32(f)
+			read_size += 4
 			self.id = readU32(f)
+			read_size += 4
 		self.rev = readU32(f)
+		read_size += 4
 		self.version = readU16(f)
+		read_size += 2
 		self.unknown = readU16(f)
-		return 24
+		read_size += 2
+		return read_size
 	
+	def is_compressed(self): 
+		compressed_flag = int('0x00040000', 16)
+		return compressed_flag & self.flags
+		
 	def read_data(self, f): 
 		if self.type == "GRUP": 
 			self.raw_data = f.read(self.data_size - 24)
 			return self.data_size - 24
-		elif self.type == "NPC_" or self.type == "CELL": 
+		elif self.is_compressed(): 
+			# Compresed flag: 0x00040000	Data is compressed
 			# TODO - is compressed ?? - how many bytes to read ??? 
 			self.compressed_data_size = readU32(f) 
-			print("%s - read %d bytes of compressed data" % (self.type, self.compressed_data_size))
+			#print("%s - read %d bytes of compressed data" % (self.type, self.compressed_data_size))
 			self.compressed_data = f.read(self.data_size - 4)
 			self.raw_data = zlib.decompress(self.compressed_data)
 			#print("end of compressed data")
@@ -104,6 +147,13 @@ class Record():
 	def read(self, f): 
 		read_bytes = self.read_metainfo(f)
 		read_bytes+= self.read_data(f)
+		
+		if self.type == "TES4": 
+			f.seek(-read_bytes, 1)
+			raw = f.read(read_bytes)
+			with open("raw/TES4", "wb") as dump_file: 
+				dump_file.write(raw)
+		
 		#print("read %s - %d bytes" % (self.type, self.data_size))
 		return read_bytes
 
@@ -112,7 +162,7 @@ class Record():
 			self.analyzeGRUP(prototypes, lvl)
 			return
 
-		print("%sanalyze data for %s" % ("\t"*lvl, self.type))
+		#print("%sanalyze data for %s" % ("\t"*lvl, self.type))
 		sub_records = prototypes[self.type]
 		#print(sub_records)
 		data = io.BytesIO(self.raw_data)
@@ -126,8 +176,8 @@ class Record():
 				#print(self.detail)
 				#
 				#raise Exception("REMAINING DATA not in prototype")
-				print("REMAINING DATA not in prototype: ")
-				print(data.read(24))
+				#print("REMAINING DATA not in prototype: ")
+				#print(data.read(24))
 				#print(self.raw_data)
 				break
 				
@@ -147,13 +197,10 @@ class Record():
 				# complex struct
 				for desc in sub_record[1]:
 					(field, data_type) = desc.split("|")
-					sr[field] = readFromBytes(data_type, data)
+					sr[field] = read_variable_size(data_type, data)[1]
 			else: 
 				(field, data_type) = sub_record[1].split("|")
-				#print("try to read %s %s" % (field, data_type))
-				#print(data.read(8))
-				#data.seek(-8, 1)
-				sr[field] = readFromBytes(data_type, data)
+				sr[field] = read_variable_size(data_type, data)[1]
 				
 			if len(sub_record) > 2: 
 				index -= int(sub_record[2])
@@ -186,7 +233,7 @@ class Record():
 			b.seek(-1, 1)
 			r = Record()
 			read_bytes_len += r.read(b)
-			print("%sread a sub group record %s of size %d" % ("\t"*lvl, r.type, r.data_size))
+			#print("%sread a sub group record %s of size %d" % ("\t"*lvl, r.type, r.data_size))
 			#print("%sbytes remaining: %d " % ("\t"*lvl, len(self.raw_data) - read_bytes_len))
 			r.analyze_data(prototypes, lvl+1)
 			sub_records.append(r)
