@@ -1,4 +1,4 @@
-import struct, collections, zlib, io
+import struct, collections, zlib, io, os
 
 UINT_LENGTH = dict()
 UINT_LENGTH[1] = "B"
@@ -7,6 +7,7 @@ UINT_LENGTH[4] = "I"
 UINT_LENGTH[8] = "Q"
 
 VARIABLE_LENGTH_TYPES = { "O", "N", "X", "Z" }
+HEX = dict()
 
 def read_fixed_size(data_size, data_type, data): 
 	""" This methods reads a fixed size from a byte stream and returns length of data read + data read formatted according to parameters 
@@ -84,6 +85,10 @@ def readString(f, size):
 	
 def isiterable(value): 
 	return isinstance(value, collections.Iterable) and not isinstance(value, str)
+
+def dump_file(path, data): 
+	with open(path, "wb") as dump_file: 
+		dump_file.write(data)
 	
 class Record(): 
 	def __init__(self):
@@ -122,6 +127,7 @@ class Record():
 		read_size += 2
 		return read_size
 	
+	# Compresed flag: 0x00040000	Data is compressed
 	def is_compressed(self): 
 		compressed_flag = int('0x00040000', 16)
 		return compressed_flag & self.flags
@@ -131,8 +137,6 @@ class Record():
 			self.raw_data = f.read(self.data_size - 24)
 			return self.data_size - 24
 		elif self.is_compressed(): 
-			# Compresed flag: 0x00040000	Data is compressed
-			# TODO - is compressed ?? - how many bytes to read ??? 
 			self.compressed_data_size = readU32(f) 
 			#print("%s - read %d bytes of compressed data" % (self.type, self.compressed_data_size))
 			self.compressed_data = f.read(self.data_size - 4)
@@ -147,13 +151,7 @@ class Record():
 	def read(self, f): 
 		read_bytes = self.read_metainfo(f)
 		read_bytes+= self.read_data(f)
-		
-		if self.type == "TES4": 
-			f.seek(-read_bytes, 1)
-			raw = f.read(read_bytes)
-			with open("raw/TES4", "wb") as dump_file: 
-				dump_file.write(raw)
-		
+		self.read_bytes = read_bytes
 		#print("read %s - %d bytes" % (self.type, self.data_size))
 		return read_bytes
 
@@ -198,9 +196,13 @@ class Record():
 				for desc in sub_record[1]:
 					(field, data_type) = desc.split("|")
 					sr[field] = read_variable_size(data_type, data)[1]
+					if data_type == "O": 
+						sr[field + "_hex"] = hex(sr[field])
 			else: 
 				(field, data_type) = sub_record[1].split("|")
 				sr[field] = read_variable_size(data_type, data)[1]
+				if data_type == "O": 
+					sr[field + "_hex"] = hex(sr[field])
 				
 			if len(sub_record) > 2: 
 				index -= int(sub_record[2])
@@ -215,6 +217,21 @@ class Record():
 			#print("data analyzed: %s" % sr)
 			self.detail[name] = sr
 			
+		out = "raw/" + self.type
+		if not os.path.exists(out):
+			os.makedirs(out)
+		if "EDID" in self.detail:
+			id = self.detail["EDID"]["Editor ID"][:-1]
+			#print("EDID: %s" % id)
+			out += "/%s" % id
+			dump_file(out, self.raw_data)
+		elif self.type == "REFR" and "NAME" in self.detail and "Object form ID" in self.detail["NAME"]: 
+			id = self.detail["NAME"]["Object form ID"]
+			out += "/%s" % id
+			dump_file(out, self.raw_data)
+		else: 
+			print("item without EDID: %s" % self.detail)
+				
 	def analyzeGRUP(self, prototypes, lvl): 
 		sub_records = []
 		
@@ -237,6 +254,8 @@ class Record():
 			#print("%sbytes remaining: %d " % ("\t"*lvl, len(self.raw_data) - read_bytes_len))
 			r.analyze_data(prototypes, lvl+1)
 			sub_records.append(r)
+		
+		print(HEX)
 		
 	def pretty_print(self, tabs): 
 		s = "\t" * tabs + "Record %s: \n" % self.type

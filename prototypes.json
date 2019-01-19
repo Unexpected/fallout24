@@ -77,11 +77,11 @@
 "REFR": [
 	["EDID", "Editor ID|Z"], 
 	["NAME", "Object form ID|O"], 
-	["DATA", "Location Data|X"]
+	["DATA", ["data_size|H", "x|f", "y|f", "z|f", "rx|f", "ry|f", "rz|f"]]
 ],
 "ACHR": [
 	["EDID", "Editor ID|Z"], 
 	["NAME", "Object form ID|O"], 
-	["DATA", "Location Data|X"]
+	["DATA", ["data_size|H", "x|f", "y|f", "z|f", "rx|f", "ry|f", "rz|f"]]
 ],
 "GRUP":"TODO"}

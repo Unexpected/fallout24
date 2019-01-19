@@ -1,17 +1,17 @@
 class Plugin(): 
 	def __init__(self): 
-		self.rTES4 = TES4()
-		self.records = []
-		
-	def fill(self): 
-		self.rTES4.fill()
-		
+		self.TES4 = None
+		self.GRUPs = []
+	
+	def get_raw_data(): 
+		raw = self.TES4
+		for grup in self.GRUPs: 
+			raw += grup
+		return raw
+	
 	def write(self, target_file_path): 
-		plugin_file = open(target_file_path, 'wb')
-		
-		self.rTES4.write(plugin_file)
-		for r in self.records: 
-			r.write(plugin_file)
+		with open(target_file_path, 'wb') as plugin_file: 
+			plugin_file.write(self.get_raw_data())
 
-		plugin_file.close()
+			
 	
