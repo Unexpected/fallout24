@@ -127,7 +127,7 @@ class Record():
 		read_size += 2
 		return read_size
 	
-	# Compresed flag: 0x00040000	Data is compressed
+	# Compressed flag: 0x00040000	Data is compressed
 	def is_compressed(self): 
 		compressed_flag = int('0x00040000', 16)
 		return compressed_flag & self.flags
@@ -160,7 +160,7 @@ class Record():
 			self.analyzeGRUP(prototypes, lvl)
 			return
 
-		#print("%sanalyze data for %s" % ("\t"*lvl, self.type))
+		print("%sanalyze data for %s" % ("\t"*lvl, self.type))
 		sub_records = prototypes[self.type]
 		#print(sub_records)
 		data = io.BytesIO(self.raw_data)
@@ -216,7 +216,12 @@ class Record():
 			
 			#print("data analyzed: %s" % sr)
 			self.detail[name] = sr
-			
+		
+		
+		# Dump files
+		# self.dump_files()
+		
+	def dump_files(self): 
 		out = "raw/" + self.type
 		if not os.path.exists(out):
 			os.makedirs(out)
@@ -231,7 +236,8 @@ class Record():
 			dump_file(out, self.raw_data)
 		else: 
 			print("item without EDID: %s" % self.detail)
-				
+
+			
 	def analyzeGRUP(self, prototypes, lvl): 
 		sub_records = []
 		
