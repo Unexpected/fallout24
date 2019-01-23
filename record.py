@@ -140,7 +140,9 @@ class Record():
 			self.compressed_data_size = readU32(f) 
 			#print("%s - read %d bytes of compressed data" % (self.type, self.compressed_data_size))
 			self.compressed_data = f.read(self.data_size - 4)
+			#print("compressed: %s" % self.compressed_data)
 			self.raw_data = zlib.decompress(self.compressed_data)
+			print("uncompressed data from %d to %d" % (self.data_size - 4, len(self.raw_data)))
 			#print("end of compressed data")
 			#print(self.compressed_data[-20:])
 			return self.data_size - 4
@@ -152,7 +154,7 @@ class Record():
 		read_bytes = self.read_metainfo(f)
 		read_bytes+= self.read_data(f)
 		self.read_bytes = read_bytes
-		#print("read %s - %d bytes" % (self.type, self.data_size))
+		print("read %s - %d bytes" % (self.type, self.data_size))
 		return read_bytes
 
 	def analyze_data(self, prototypes, lvl): 
@@ -254,6 +256,8 @@ class Record():
 		read_bytes_len = 0
 		while b.read(1): 
 			b.seek(-1, 1)
+			#print(b.read(20))
+			#b.seek(-20, 1)
 			r = Record()
 			read_bytes_len += r.read(b)
 			#print("%sread a sub group record %s of size %d" % ("\t"*lvl, r.type, r.data_size))

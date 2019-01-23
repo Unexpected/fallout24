@@ -13,7 +13,7 @@ class Plugin():
 		with open("%s/TES4" % self.raw_data_dir, "rb") as tes4_file:
 			self.TES4 = tes4_file.read()
 		
-	def get_raw_data(): 
+	def get_raw_data(self): 
 		raw = self.TES4
 		for grup in self.GRUPs: 
 			raw += grup
