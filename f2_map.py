@@ -31,10 +31,13 @@ class Map:
 		objs = []
 		
 		for object in self.objects: 
-			if "tree" in object["art"]: 
-				x = object["position"]["x"]
-				y = object["position"]["y"]
-				objs.append((x, y, "tree"))
+			x = int(object["position"]["x"])
+			y = int(object["position"]["y"])
+			y = 0.5 * y
+			if x % 2 != 0: 
+				y -= 0.25
+			x = 0.5 * x
+			objs.append((x, y, object["art"].split("/")[2]))
 		return objs
 	
 	

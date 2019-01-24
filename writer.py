@@ -13,6 +13,9 @@ OBJECTS["BldWoodBSmFlrOnly02"] = 486401
 OBJECTS["BldWoodBSmFlrOnly04"] = 486403
 OBJECTS["BldWoodBSmFlrOnly09"] = 486408
 OBJECTS["TreeSapling03"] = 1742810
+OBJECTS["TreeMaplePreWar04Gr"] = 398918
+OBJECTS["FloraWildCornStalk01"] = 1851412
+OBJECTS["CampFireMed01_Off"] = 396627
 
 TILES = dict()
 TILES["edg5003"] = "BldWoodBSmFlrOnly01"
@@ -79,30 +82,49 @@ def get_refr_raw_data(floor_tiles, objs, x_min, y_min, width, height):
 			edid = OBJECTS[TILES[tile]]
 		else: 
 			edid = OBJECTS["BldWoodBSmFlrOnly09"]
-		with open("raw/REFR/%d" % edid, "rb") as raw_base_file: 
+		with open("raw/REFR/%s" % edid, "rb") as raw_base_file: 
 			refr = raw_base_file.read()
 		
 		# REFR is : 
 		# NAME(4) + EDID(2+4) + DATA(4)+data_size(2) + x(4) + y(4) + z(4) + rx(4) + ry(4) + rz(4)
 		refr = refr[:16] + struct.pack("f", real_x*256) + struct.pack("f", real_y*256) + refr[24:]
+
 		refr_header = get_raw_header("REFR", len(refr), 0)
 		raw_data += (refr_header + refr)
 		#print("%d/%d %s" % (x, y, refr))
-		
+	
+	types_to_do = dict()
 	for (x, y, object) in objs: 
+		if object == "block": 
+			continue
+		elif "tree" in object: 
+			edid = OBJECTS["TreeMaplePreWar04Gr"]
+		elif "weed" in object: 
+			edid = OBJECTS["TreeSapling03"]
+		elif "corn" in object: 
+			edid = OBJECTS["FloraWildCornStalk01"]
+		elif "woodfire" in object: 
+			edid = OBJECTS["CampFireMed01_Off"]
+		else: 
+			if object not in types_to_do: 
+				types_to_do[object] = 0
+			types_to_do[object] += 1
+			continue
+			
 		real_x = (x - x_min) - width / 2
 		real_y = (y - y_min) - height / 2
 		
-		edid = OBJECTS["TreeElmForest01Institute"]
-		with open("raw/REFR/%d" % edid, "rb") as raw_base_file: 
+		with open("raw/REFR/2011474", "rb") as raw_base_file: 
 			refr = raw_base_file.read()
 		
 		# REFR is : 
 		# NAME(4) + EDID(2+4) + DATA(4)+data_size(2) + x(4) + y(4) + z(4) + rx(4) + ry(4) + rz(4)
-		refr = refr[:16] + struct.pack("f", real_x*256) + struct.pack("f", real_y*256) + refr[24:]
+		refr = refr[:6] + struct.pack("I", edid) + refr[10:16] + struct.pack("f", real_x*256) + struct.pack("f", real_y*256) + refr[24:]
 		refr_header = get_raw_header("REFR", len(refr), 0)
 		raw_data += (refr_header + refr)
 		#print("%d/%d %s" % (x, y, refr))
+	
+	print(types_to_do)
 	
 	return raw_data
 
@@ -172,6 +194,7 @@ def main():
 	floor_tiles = map.get_floor_tiles()
 	objs = map.get_objects()
 	x_min, y_min, width, height = map.get_map_size()
+	print("%d, %d, %d, %d" % (x_min, y_min, width, height))
 	#print(refr_data)
 
 	# struct of the grup tree, in reverse order
