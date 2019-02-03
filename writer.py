@@ -1,4 +1,4 @@
-import sys, record, json, f2_map, grup, struct, zlib
+import sys, record, json, f2_map, grup, struct, zlib, math
 from plugin import Plugin
 from grup import GRUP
 
@@ -16,6 +16,11 @@ OBJECTS["TreeSapling03"] = 1742810
 OBJECTS["TreeMaplePreWar04Gr"] = 398918
 OBJECTS["FloraWildCornStalk01"] = 1851412
 OBJECTS["CampFireMed01_Off"] = 396627
+OBJECTS["CinderBlockSquare01"] = 7680
+OBJECTS["RWResPost01"] = 252692
+OBJECTS["BldBrickSmFlrPlatQuarter01"] = 575511
+
+OBJECTS["BldWoodBBGWall01"] = 486165
 
 TILES = dict()
 TILES["edg5003"] = "BldWoodBSmFlrOnly01"
@@ -73,11 +78,9 @@ def get_tes4_header(data_size):
 	return raw_header
 
 	
-def get_refr_raw_data(floor_tiles, objs, x_min, y_min, width, height): 
+def get_refr_raw_data(floor_tiles, objs, v_walls, h_walls): 
 	raw_data = b''
 	for (x, y, tile) in floor_tiles: 
-		real_x = (x - x_min) - width / 2
-		real_y = (y - y_min) - height / 2
 		if tile in TILES: 
 			edid = OBJECTS[TILES[tile]]
 		else: 
@@ -87,16 +90,26 @@ def get_refr_raw_data(floor_tiles, objs, x_min, y_min, width, height):
 		
 		# REFR is : 
 		# NAME(4) + EDID(2+4) + DATA(4)+data_size(2) + x(4) + y(4) + z(4) + rx(4) + ry(4) + rz(4)
-		refr = refr[:16] + struct.pack("f", real_x*256) + struct.pack("f", real_y*256) + refr[24:]
+		refr = refr[:16] + struct.pack("f", x*256) + struct.pack("f", y*256) + refr[24:]
 
 		refr_header = get_raw_header("REFR", len(refr), 0)
 		raw_data += (refr_header + refr)
 		#print("%d/%d %s" % (x, y, refr))
 	
 	types_to_do = dict()
-	for (x, y, object) in objs: 
-		if object == "block": 
-			continue
+	for (x, y, type, object) in objs: 
+		z = 0
+		if type == "walls": 
+			edid = OBJECTS["CinderBlockSquare01"]
+		#elif object == "block": 
+		#	if type == "misc": 
+		#		pass
+		#		# edid = OBJECTS["RWResPost01"]
+		#	else: 
+		#		edid = OBJECTS["CinderBlockSquare01"]
+		elif "exit" in object: 
+			edid = OBJECTS["BldBrickSmFlrPlatQuarter01"]
+			z = 5
 		elif "tree" in object: 
 			edid = OBJECTS["TreeMaplePreWar04Gr"]
 		elif "weed" in object: 
@@ -111,21 +124,78 @@ def get_refr_raw_data(floor_tiles, objs, x_min, y_min, width, height):
 			types_to_do[object] += 1
 			continue
 			
-		real_x = (x - x_min) - width / 2
-		real_y = (y - y_min) - height / 2
-		
 		with open("raw/REFR/2011474", "rb") as raw_base_file: 
 			refr = raw_base_file.read()
 		
 		# REFR is : 
 		# NAME(4) + EDID(2+4) + DATA(4)+data_size(2) + x(4) + y(4) + z(4) + rx(4) + ry(4) + rz(4)
-		refr = refr[:6] + struct.pack("I", edid) + refr[10:16] + struct.pack("f", real_x*256) + struct.pack("f", real_y*256) + refr[24:]
+		refr = refr[:6] + struct.pack("I", edid) + refr[10:16] + struct.pack("f", x*256) + struct.pack("f", y*256) + struct.pack("f", z) + refr[28:]
 		refr_header = get_raw_header("REFR", len(refr), 0)
 		raw_data += (refr_header + refr)
 		#print("%d/%d %s" % (x, y, refr))
 	
 	print(types_to_do)
-	
+	#print(walls)
+	for wall in v_walls: 
+		for (x, y, type, wall_name) in wall:
+			with open("raw/REFR/2011474", "rb") as raw_base_file: 
+				refr = raw_base_file.read()
+			
+			edid = OBJECTS["BldWoodBBGWall01"]
+			y = 0.5 * y
+			if x % 2 != 0: 
+				y -= 0.25
+			x = 0.5 * x
+
+			#print("wall at %f/%f" % (x, y))
+			# REFR is : 
+			# NAME(4) + EDID(2+4) + XSCL(2+4) + DATA(4)+data_size(2) + x(4) + y(4) + z(4) + rx(4) + ry(4) + rz(4)
+			refr = refr[:6] + struct.pack("I", edid)
+			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.5)
+			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*256 + 60) + struct.pack("f", y*256) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0)
+			refr_header = get_raw_header("REFR", len(refr), 0)
+			raw_data += (refr_header + refr)
+
+			with open("raw/REFR/2011474", "rb") as raw_base_file: 
+				refr = raw_base_file.read()
+			
+			refr = refr[:6] + struct.pack("I", edid)
+			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.5)
+			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*256 - 60) + struct.pack("f", y*256) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(180))
+			refr_header = get_raw_header("REFR", len(refr), 0)
+			raw_data += (refr_header + refr)
+
+
+	for wall in h_walls: 
+		for (x, y, type, wall_name) in wall:
+			with open("raw/REFR/2011474", "rb") as raw_base_file: 
+				refr = raw_base_file.read()
+			
+			edid = OBJECTS["BldWoodBBGWall01"]
+			y = 0.5 * y
+			if x % 2 != 0: 
+				y -= 0.25
+			x = 0.5 * x
+
+			#print("wall at %f/%f" % (x, y))
+			# REFR is : 
+			# NAME(4) + EDID(2+4) + XSCL(2+4) + DATA(4)+data_size(2) + x(4) + y(4) + z(4) + rx(4) + ry(4) + rz(4)
+			refr = refr[:6] + struct.pack("I", edid)
+			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.5)
+			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*256) + struct.pack("f", y*256) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(90))
+			refr_header = get_raw_header("REFR", len(refr), 0)
+			raw_data += (refr_header + refr)
+
+			#with open("raw/REFR/2011474", "rb") as raw_base_file: 
+			#	refr = raw_base_file.read()
+			
+			#refr = refr[:6] + struct.pack("I", edid)
+			#refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.5)
+			#refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*256) + struct.pack("f", y*256) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(180))
+			#refr_header = get_raw_header("REFR", len(refr), 0)
+			#raw_data += (refr_header + refr)
+			#print("%d/%d %s" % (x, y, refr))
+
 	return raw_data
 
 def get_cell_raw_data(form_id, edid): 
@@ -193,8 +263,10 @@ def main():
 	map, map_images = get_map_files("arvillag", F2_DATA_DIR)
 	floor_tiles = map.get_floor_tiles()
 	objs = map.get_objects()
+	v_walls, h_walls = map.get_walls()
 	x_min, y_min, width, height = map.get_map_size()
-	print("%d, %d, %d, %d" % (x_min, y_min, width, height))
+
+
 	#print(refr_data)
 
 	# struct of the grup tree, in reverse order
@@ -218,7 +290,7 @@ def main():
 
 	cell_id = get_id()
 	# refr_data									analyze data for REFR                                               
-	refr_data = get_refr_raw_data(floor_tiles, objs, x_min, y_min, width, height)
+	refr_data = get_refr_raw_data(floor_tiles, objs, v_walls, h_walls)
 
 	# temp_grup								analyze GRUP of size 2280 - label b'\x99\x0f\x00\x02' - type 9              
 	temp_grup_header = get_raw_grup_header(len(refr_data), cell_id, 9)
@@ -236,8 +308,8 @@ def main():
 
 	cell_record_header = get_raw_header("CELL", len(compressed_data), compressed_flag)
 	cell_record = cell_record_header + compressed_data
-	print(cell_record_header)
-	print(compressed_data)
+	#print(cell_record_header)
+	#print(compressed_data)
 	
 	cell_sub_block_header = get_raw_grup_header(len(cell_record) + len(cell_children), 9, 3)
 	cell_sub_block = cell_sub_block_header + cell_record + cell_children
@@ -245,9 +317,9 @@ def main():
 	cell_block_header = get_raw_grup_header(len(cell_sub_block), 3, 2)
 	cell_block = cell_block_header + cell_sub_block
 	
-	print(len(cell_block))
+	#print(len(cell_block))
 	top_grup_header = get_raw_grup_header(len(cell_block), "CELL", 0)
-	print(top_grup_header)
+	#print(top_grup_header)
 	top_grup = top_grup_header + cell_block
 	
 	p.GRUPs.append(top_grup)
