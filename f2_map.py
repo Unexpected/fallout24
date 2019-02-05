@@ -14,12 +14,15 @@ class Map:
 		return "name: %s, mapID: %s, version: %s" % (self.data["name"], self.data["mapID"], self.data["version"])
 	
 	def get_floor_tiles(self): 
+		x_min, y_min, x_max, y_max = self.get_map_bounds()
 		# return tuples: (x, y, tile)
 		# do not return grid000 tiles ?? 
 		floor_tiles = []
 		TILES_SIZE = 100
 		for y in range(TILES_SIZE): 
 			for x in range(TILES_SIZE): 
+				if x < x_min - 2 or x > x_max + 2 or y < y_min - 2 or y > y_max + 2: 
+					continue
 				tile = self.floor[y][x]
 				if tile != "grid000":
 					floor_tiles.append((x, y, tile))
@@ -163,6 +166,12 @@ class Map:
 		return real_walls
 
 
+	def get_map_bounds(self): 
+		x_min = min([int(o[0]) for o in self.get_objects()])
+		y_min = min([int(o[1]) for o in self.get_objects()])
+		x_max = max([int(o[0]) for o in self.get_objects()])
+		y_max = max([int(o[1]) for o in self.get_objects()])
+		return x_min, y_min, x_max, y_max
 
 	
 	def get_map_size(self): 

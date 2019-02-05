@@ -172,10 +172,13 @@ def get_refr_raw_data(floor_tiles, objs, v_walls, h_walls):
 				refr = raw_base_file.read()
 			
 			edid = OBJECTS["BldWoodBBGWall01"]
-			y = 0.5 * y
-			if x % 2 != 0: 
-				y -= 0.25
+
+			# placement is different for walls because of the "zigzag" line of hex tiles
+			y = 0.5 * (y-1)
+			#if x % 2 != 0: 
+			#	y -= 0.5
 			x = 0.5 * x
+
 
 			#print("wall at %f/%f" % (x, y))
 			# REFR is : 
@@ -186,15 +189,14 @@ def get_refr_raw_data(floor_tiles, objs, v_walls, h_walls):
 			refr_header = get_raw_header("REFR", len(refr), 0)
 			raw_data += (refr_header + refr)
 
-			#with open("raw/REFR/2011474", "rb") as raw_base_file: 
-			#	refr = raw_base_file.read()
+			with open("raw/REFR/2011474", "rb") as raw_base_file: 
+				refr = raw_base_file.read()
 			
-			#refr = refr[:6] + struct.pack("I", edid)
-			#refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.5)
-			#refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*256) + struct.pack("f", y*256) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(180))
-			#refr_header = get_raw_header("REFR", len(refr), 0)
-			#raw_data += (refr_header + refr)
-			#print("%d/%d %s" % (x, y, refr))
+			refr = refr[:6] + struct.pack("I", edid)
+			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.5)
+			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*256) + struct.pack("f", y*256+128) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(270))
+			refr_header = get_raw_header("REFR", len(refr), 0)
+			raw_data += (refr_header + refr)
 
 	return raw_data
 
