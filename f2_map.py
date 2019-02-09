@@ -161,7 +161,7 @@ class Map:
 			for wall_piece_id in real_wall: 
 				wall_object = wall_objects[wall_piece_id]
 				wall_str += "%d/%d - %s " % (wall_object[0], wall_object[1], wall_object[3])
-			print(wall_str)
+			#print(wall_str)
 
 		return real_walls
 

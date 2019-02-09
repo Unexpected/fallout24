@@ -1,4 +1,4 @@
-import sys, record, json, f2_map, grup, struct, zlib, math
+import sys, record, json, f2_map, grup, struct, zlib, math, os
 from plugin import Plugin
 from grup import GRUP
 
@@ -134,7 +134,7 @@ def get_refr_raw_data(floor_tiles, objs, v_walls, h_walls):
 		raw_data += (refr_header + refr)
 		#print("%d/%d %s" % (x, y, refr))
 	
-	print(types_to_do)
+	#print(types_to_do)
 	#print(walls)
 	for wall in v_walls: 
 		for (x, y, type, wall_name) in wall:
@@ -241,54 +241,12 @@ def get_raw_grup_header(data_size, label, group_type):
 	raw_header += struct.pack("H", 131) # version
 	raw_header += struct.pack("H", 0) # rev2
 	return raw_header
-	
-def main():
-	#global F2_DATA_DIR, RAW_INPUT_DIR
 
-	if len(sys.argv) < 3:
-		print("USAGE:", sys.argv[0], "F2_DATA_DIR", "RAW_INPUT_DIR")
-		return
-
-	F2_DATA_DIR = sys.argv[1]
-	RAW_INPUT_DIR = sys.argv[2]
-	
-	p = Plugin()
-	
-	#p.init(RAW_INPUT_DIR)
-	#p.build_TES4()
-
-	with open("%s/TES4" % RAW_INPUT_DIR, "rb") as tes4_file:
-		tes4_raw_data = tes4_file.read()
-	tes4_raw_header = get_tes4_header(len(tes4_raw_data))
-	p.TES4 = (tes4_raw_header + tes4_raw_data)
-	
-	map, map_images = get_map_files("arvillag", F2_DATA_DIR)
+def get_map_cell_sub_block(map, number): 
 	floor_tiles = map.get_floor_tiles()
 	objs = map.get_objects()
 	v_walls, h_walls = map.get_walls()
-	x_min, y_min, width, height = map.get_map_size()
-
-
-	#print(refr_data)
-
-	# struct of the grup tree, in reverse order
-	# 
-	# refr_data									analyze data for REFR                                               
-	# refr_data									analyze data for REFR                                               
-	# refr_data									analyze data for REFR                                               
-	#
-	# temp_grup								analyze GRUP of size 2280 - label b'\x99\x0f\x00\x02' - type 9              
-	#									 CELL children of CELL ID 33558425                                                  
-	# cell_children_grup			analyze GRUP of size 2304 - label 33558425 - type 6                                 
-	#
-	# cell_record					analyze data for CELL                                                               
-	#
-	# cell_grup					 type #3 - Interior cell sub-block, sub-block number 9                                      
-	#							analyze GRUP of size 2541 - label 9 - type 3                                                
-	#						 type #2 - Interior cell block, block number 3                                                      
-	#						analyze GRUP of size 2565 - label 3 - type 2                                                        
-	#		 			type #0 - Top group of CELL                                                                                
-	#					analyze GRUP of size 2882 - label CELL - type 0                                                             
+	#x_min, y_min, width, height = map.get_map_size()
 
 	cell_id = get_id()
 	# refr_data									analyze data for REFR                                               
@@ -310,14 +268,44 @@ def main():
 
 	cell_record_header = get_raw_header("CELL", len(compressed_data), compressed_flag)
 	cell_record = cell_record_header + compressed_data
-	#print(cell_record_header)
-	#print(compressed_data)
-	
-	cell_sub_block_header = get_raw_grup_header(len(cell_record) + len(cell_children), 9, 3)
+
+	cell_sub_block_header = get_raw_grup_header(len(cell_record) + len(cell_children), number, 3)
 	cell_sub_block = cell_sub_block_header + cell_record + cell_children
+	return cell_sub_block
+
+
+def main():
+	#global F2_DATA_DIR, RAW_INPUT_DIR
+
+	if len(sys.argv) < 3:
+		print("USAGE:", sys.argv[0], "F2_DATA_DIR", "RAW_INPUT_DIR")
+		return
+
+	F2_DATA_DIR = sys.argv[1]
+	RAW_INPUT_DIR = sys.argv[2]
 	
-	cell_block_header = get_raw_grup_header(len(cell_sub_block), 3, 2)
-	cell_block = cell_block_header + cell_sub_block
+	p = Plugin()
+	
+	#p.init(RAW_INPUT_DIR)
+	#p.build_TES4()
+
+	with open("%s/TES4" % RAW_INPUT_DIR, "rb") as tes4_file:
+		tes4_raw_data = tes4_file.read()
+	tes4_raw_header = get_tes4_header(len(tes4_raw_data))
+	p.TES4 = (tes4_raw_header + tes4_raw_data)
+	
+	sub_blocks = b''
+	number = 0
+	for map_file in os.listdir("%s/maps" % F2_DATA_DIR):
+		if "images.json" in map_file: 
+			continue
+		with open("%s/maps/%s" % (F2_DATA_DIR, map_file), "r") as map_file: 
+			map = f2_map.Map(json.loads(map_file.read()))
+			sub_blocks += get_map_cell_sub_block(map, number)
+			number += 1
+
+	cell_block_header = get_raw_grup_header(len(sub_blocks), 3, 2)
+	cell_block = cell_block_header + sub_blocks
 	
 	#print(len(cell_block))
 	top_grup_header = get_raw_grup_header(len(cell_block), "CELL", 0)
