@@ -2,6 +2,8 @@ import sys, record, json, f2_map, grup, struct, zlib, math, os
 from plugin import Plugin
 from grup import GRUP
 
+MAP_SIZE_FACTOR = 128
+
 OBJECTS = dict()
 OBJECTS["F2CovenantGenericM01"] = 33560401
 OBJECTS["F2CovenantGenericF01"] = 33560403
@@ -57,11 +59,11 @@ def get_id():
 	BASE_ID += 1
 	return BASE_ID
 	
-def get_raw_header(type, data_size, flags): 
+def get_raw_header(type, data_size, flags, id = None): 
 	raw_header = type.encode("utf-8") # type 
 	raw_header += struct.pack("I", data_size) # data_size
 	raw_header += struct.pack("I", flags) # flags
-	raw_header += struct.pack("I", get_id()) # id
+	raw_header += struct.pack("I", id if id else get_id()) # id
 	raw_header += struct.pack("I", 0) # rev
 	raw_header += struct.pack("H", 131) # version
 	raw_header += struct.pack("H", 0) # rev2
@@ -78,7 +80,7 @@ def get_tes4_header(data_size):
 	return raw_header
 
 	
-def get_refr_raw_data(floor_tiles, objs, v_walls, h_walls): 
+def get_refr_raw_data(map_name, floor_tiles, objs, v_walls, h_walls, entrances): 
 	raw_data = b''
 	for (x, y, tile) in floor_tiles: 
 		if tile in TILES: 
@@ -90,12 +92,39 @@ def get_refr_raw_data(floor_tiles, objs, v_walls, h_walls):
 		
 		# REFR is : 
 		# NAME(4) + EDID(2+4) + DATA(4)+data_size(2) + x(4) + y(4) + z(4) + rx(4) + ry(4) + rz(4)
-		refr = refr[:16] + struct.pack("f", x*256) + struct.pack("f", y*256) + refr[24:]
+		refr = refr[:16] + struct.pack("f", x*MAP_SIZE_FACTOR) + struct.pack("f", y*MAP_SIZE_FACTOR) + refr[24:]
 
 		refr_header = get_raw_header("REFR", len(refr), 0)
 		raw_data += (refr_header + refr)
 		#print("%d/%d %s" % (x, y, refr))
-	
+
+	for (x, y, dir) in entrances: 
+		edid = "coc_%s" % (map_name)
+		eid += 1
+		# REFR is : 
+		# EDID / NAME / DATA 
+		refr = "EDID".encode("utf-8") + struct.pack("H", len(edid)) + edid.encode("utf-8")
+		refr += "NAME".encode("utf-8") + struct.pack("H", 4) + struct.pack("I", 50)
+		refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*MAP_SIZE_FACTOR) + struct.pack("f", y*MAP_SIZE_FACTOR) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0)
+
+		refr_header = get_raw_header("REFR", len(refr), 0)
+		raw_data += (refr_header + refr)
+
+		break  # Only one COC for each cell ?? 
+
+	eid = 0
+	for (x, y, dir) in entrances: 
+		edid = "Entrance_%d" % (eid)
+		eid += 1
+		# REFR is : 
+		# EDID / NAME / DATA 
+		refr = "EDID".encode("utf-8") + struct.pack("H", len(edid)) + edid.encode("utf-8")
+		refr += "NAME".encode("utf-8") + struct.pack("H", 4) + struct.pack("I", 126327)
+		refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*MAP_SIZE_FACTOR) + struct.pack("f", y*MAP_SIZE_FACTOR) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0)
+
+		refr_header = get_raw_header("REFR", len(refr), 0)
+		raw_data += (refr_header + refr)
+
 	types_to_do = dict()
 	for (x, y, type, object) in objs: 
 		z = 0
@@ -129,7 +158,7 @@ def get_refr_raw_data(floor_tiles, objs, v_walls, h_walls):
 		
 		# REFR is : 
 		# NAME(4) + EDID(2+4) + DATA(4)+data_size(2) + x(4) + y(4) + z(4) + rx(4) + ry(4) + rz(4)
-		refr = refr[:6] + struct.pack("I", edid) + refr[10:16] + struct.pack("f", x*256) + struct.pack("f", y*256) + struct.pack("f", z) + refr[28:]
+		refr = refr[:6] + struct.pack("I", edid) + refr[10:16] + struct.pack("f", x*MAP_SIZE_FACTOR) + struct.pack("f", y*MAP_SIZE_FACTOR) + struct.pack("f", z) + refr[28:]
 		refr_header = get_raw_header("REFR", len(refr), 0)
 		raw_data += (refr_header + refr)
 		#print("%d/%d %s" % (x, y, refr))
@@ -151,8 +180,8 @@ def get_refr_raw_data(floor_tiles, objs, v_walls, h_walls):
 			# REFR is : 
 			# NAME(4) + EDID(2+4) + XSCL(2+4) + DATA(4)+data_size(2) + x(4) + y(4) + z(4) + rx(4) + ry(4) + rz(4)
 			refr = refr[:6] + struct.pack("I", edid)
-			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.5)
-			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*256 + 60) + struct.pack("f", y*256) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0)
+			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.25)
+			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*MAP_SIZE_FACTOR + 30) + struct.pack("f", y*MAP_SIZE_FACTOR) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0)
 			refr_header = get_raw_header("REFR", len(refr), 0)
 			raw_data += (refr_header + refr)
 
@@ -160,8 +189,8 @@ def get_refr_raw_data(floor_tiles, objs, v_walls, h_walls):
 				refr = raw_base_file.read()
 			
 			refr = refr[:6] + struct.pack("I", edid)
-			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.5)
-			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*256 - 60) + struct.pack("f", y*256) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(180))
+			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.25)
+			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*MAP_SIZE_FACTOR - 30) + struct.pack("f", y*MAP_SIZE_FACTOR) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(180))
 			refr_header = get_raw_header("REFR", len(refr), 0)
 			raw_data += (refr_header + refr)
 
@@ -184,8 +213,8 @@ def get_refr_raw_data(floor_tiles, objs, v_walls, h_walls):
 			# REFR is : 
 			# NAME(4) + EDID(2+4) + XSCL(2+4) + DATA(4)+data_size(2) + x(4) + y(4) + z(4) + rx(4) + ry(4) + rz(4)
 			refr = refr[:6] + struct.pack("I", edid)
-			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.5)
-			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*256) + struct.pack("f", y*256) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(90))
+			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.25)
+			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*MAP_SIZE_FACTOR) + struct.pack("f", y*MAP_SIZE_FACTOR) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(90))
 			refr_header = get_raw_header("REFR", len(refr), 0)
 			raw_data += (refr_header + refr)
 
@@ -193,8 +222,8 @@ def get_refr_raw_data(floor_tiles, objs, v_walls, h_walls):
 				refr = raw_base_file.read()
 			
 			refr = refr[:6] + struct.pack("I", edid)
-			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.5)
-			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*256) + struct.pack("f", y*256+128) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(270))
+			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.25)
+			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*MAP_SIZE_FACTOR) + struct.pack("f", y*MAP_SIZE_FACTOR+64) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(270))
 			refr_header = get_raw_header("REFR", len(refr), 0)
 			raw_data += (refr_header + refr)
 
@@ -242,15 +271,18 @@ def get_raw_grup_header(data_size, label, group_type):
 	raw_header += struct.pack("H", 0) # rev2
 	return raw_header
 
-def get_map_cell_sub_block(map, number): 
-	floor_tiles = map.get_floor_tiles()
-	objs = map.get_objects()
-	v_walls, h_walls = map.get_walls()
+def get_map_cell_sub_block(map, number, level): 
+	floor_tiles = map.get_floor_tiles(level)
+	objs = map.get_objects(level)
+	v_walls, h_walls = map.get_walls(level)
+	entrances = map.get_entrances(level)
+	map_name = map.name[:-4] + "_" + str(level)
+
 	#x_min, y_min, width, height = map.get_map_size()
 
 	cell_id = get_id()
 	# refr_data									analyze data for REFR                                               
-	refr_data = get_refr_raw_data(floor_tiles, objs, v_walls, h_walls)
+	refr_data = get_refr_raw_data(map_name, floor_tiles, objs, v_walls, h_walls, entrances)
 
 	# temp_grup								analyze GRUP of size 2280 - label b'\x99\x0f\x00\x02' - type 9              
 	temp_grup_header = get_raw_grup_header(len(refr_data), cell_id, 9)
@@ -262,11 +294,11 @@ def get_map_cell_sub_block(map, number):
 	cell_children = cell_children_grup_header + temp_grup
 
 	# cell_record					analyze data for CELL                                                               
-	cell_record_data = get_cell_raw_data(cell_id, map.name)
+	cell_record_data = get_cell_raw_data(cell_id, map_name)
 	compressed_flag = int('0x00040000', 16)
 	compressed_data = struct.pack("I", len(cell_record_data)) + zlib.compress(cell_record_data)
 
-	cell_record_header = get_raw_header("CELL", len(compressed_data), compressed_flag)
+	cell_record_header = get_raw_header("CELL", len(compressed_data), compressed_flag, cell_id)
 	cell_record = cell_record_header + compressed_data
 
 	cell_sub_block_header = get_raw_grup_header(len(cell_record) + len(cell_children), number, 3)
@@ -294,14 +326,38 @@ def main():
 	tes4_raw_header = get_tes4_header(len(tes4_raw_data))
 	p.TES4 = (tes4_raw_header + tes4_raw_data)
 	
-	sub_blocks = b''
-	number = 0
+	maps = dict()
+
 	for map_file in os.listdir("%s/maps" % F2_DATA_DIR):
 		if "images.json" in map_file: 
 			continue
 		with open("%s/maps/%s" % (F2_DATA_DIR, map_file), "r") as map_file: 
 			map = f2_map.Map(json.loads(map_file.read()))
-			sub_blocks += get_map_cell_sub_block(map, number)
+			if map.map_id < 0: 
+				continue
+			maps[map.map_id] = map
+
+	for map in maps.values(): 
+		exits = map.get_exits()
+		for (map_id, pos, map_level, direction) in exits: 
+			x = pos % 200
+			y = pos // 200
+			y = 0.5 * y
+			if x % 2 != 0: 
+				y -= 0.25
+			x = 0.5 * x
+			if not map_level in maps[map_id].entrances: 
+				maps[map_id].entrances[map_level] = set()
+			maps[map_id].entrances[map_level].add((x, y, direction))
+
+	for map in maps.values(): 
+		print("map %d, entrances: %s" % (map.map_id, map.entrances))
+	
+	sub_blocks = b''
+	number = 0
+	for map in maps.values():
+		for level in range(len(map.levels)):
+			sub_blocks += get_map_cell_sub_block(map, number, level)
 			number += 1
 
 	cell_block_header = get_raw_grup_header(len(sub_blocks), 3, 2)

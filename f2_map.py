@@ -4,17 +4,31 @@ class Map:
 		self.name = self.data["name"]
 		self.map_id = self.data["mapID"]
 		self.levels = self.data["levels"]
-		self.tiles = self.levels[0]["tiles"]
-		self.spatials = self.levels[0]["spatials"]
-		self.objects = self.levels[0]["objects"]
-		self.floor = self.tiles["floor"]
-		self.roof = self.tiles["roof"]
+
+		self.tiles = dict()
+		self.objects = dict()
+		self.floor = dict()
+		self.roof = dict()
+
+		for level in range(len(self.levels)): 
+			self.tiles[level] = self.levels[level]["tiles"]
+			#self.spatials = self.levels[0]["spatials"]
+			self.objects[level] = self.levels[level]["objects"]
+			self.floor[level] = self.tiles[level]["floor"]
+			self.roof[level] = self.tiles[level]["roof"]
+		
+		self.entrances = dict()
 		
 	def __str__(self): 
 		return "name: %s, mapID: %s, version: %s" % (self.data["name"], self.data["mapID"], self.data["version"])
 	
-	def get_floor_tiles(self): 
-		x_min, y_min, x_max, y_max = self.get_map_bounds()
+	def get_entrances(self, level): 
+		if level not in self.entrances: 
+			return set()
+		return self.entrances[level]
+
+	def get_floor_tiles(self, level): 
+		x_min, y_min, x_max, y_max = self.get_map_bounds(level)
 		# return tuples: (x, y, tile)
 		# do not return grid000 tiles ?? 
 		floor_tiles = []
@@ -23,17 +37,17 @@ class Map:
 			for x in range(TILES_SIZE): 
 				if x < x_min - 2 or x > x_max + 2 or y < y_min - 2 or y > y_max + 2: 
 					continue
-				tile = self.floor[y][x]
+				tile = self.floor[level][y][x]
 				if tile != "grid000":
 					floor_tiles.append((x, y, tile))
 		return floor_tiles
 	
-	def get_objects(self): 
+	def get_objects(self, level): 
 		# return tuples: (x, y, tile)
 		# do not return grid000 tiles ?? 
 		objs = []
 		
-		for object in self.objects: 
+		for object in self.objects[level]: 
 			x = int(object["position"]["x"])
 			y = int(object["position"]["y"])
 			type = object["art"].split("/")[1]
@@ -45,9 +59,9 @@ class Map:
 			objs.append((x, y, type, obj_name))
 		return objs
 	
-	def get_walls(self): 
+	def get_walls(self, level): 
 		wall_objects = dict()
-		for object in self.objects: 
+		for object in self.objects[level]: 
 			type = object["art"].split("/")[1]
 			obj_name = object["art"].split("/")[2]
 			if type == "walls" or obj_name == "block" and type != "misc":
@@ -166,28 +180,79 @@ class Map:
 		return real_walls
 
 
-	def get_map_bounds(self): 
-		x_min = min([int(o[0]) for o in self.get_objects()])
-		y_min = min([int(o[1]) for o in self.get_objects()])
-		x_max = max([int(o[0]) for o in self.get_objects()])
-		y_max = max([int(o[1]) for o in self.get_objects()])
+	def get_map_bounds(self, level): 
+		x_min = min([int(o[0]) for o in self.get_objects(level)])
+		y_min = min([int(o[1]) for o in self.get_objects(level)])
+		x_max = max([int(o[0]) for o in self.get_objects(level)])
+		y_max = max([int(o[1]) for o in self.get_objects(level)])
 		return x_min, y_min, x_max, y_max
 
 	
-	def get_map_size(self): 
-		x_min = min([int(o[0]) for o in self.get_objects() if o[2] == "misc" and o[3] == "block"])
-		y_min = min([int(o[1]) for o in self.get_objects() if o[2] == "misc" and o[3] == "block"])
-		x_max = max([int(o[0]) for o in self.get_objects() if o[2] == "misc" and o[3] == "block"])
-		y_max = max([int(o[1]) for o in self.get_objects() if o[2] == "misc" and o[3] == "block"])
+	def get_map_size(self, level): 
+		x_min = min([int(o[0]) for o in self.get_objects(level) if o[2] == "misc" and o[3] == "block"])
+		y_min = min([int(o[1]) for o in self.get_objects(level) if o[2] == "misc" and o[3] == "block"])
+		x_max = max([int(o[0]) for o in self.get_objects(level) if o[2] == "misc" and o[3] == "block"])
+		y_max = max([int(o[1]) for o in self.get_objects(level) if o[2] == "misc" and o[3] == "block"])
 		print("%d, %d, %d, %d" % (x_min, y_min, x_max, y_max))
 		
-		x_min = min([int(o[0]) for o in self.get_objects()])
-		y_min = min([int(o[1]) for o in self.get_objects()])
-		x_max = max([int(o[0]) for o in self.get_objects()])
-		y_max = max([int(o[1]) for o in self.get_objects()])
+		x_min = min([int(o[0]) for o in self.get_objects(level)])
+		y_min = min([int(o[1]) for o in self.get_objects(level)])
+		x_max = max([int(o[0]) for o in self.get_objects(level)])
+		y_max = max([int(o[1]) for o in self.get_objects(level)])
 		width = x_max - x_min
 		height = y_max - y_min
 		print("%d, %d, %d, %d" % (x_min, y_min, x_max, y_max))
 
 		
 		return x_min, y_min, width, height
+
+	def get_exits(self): 
+		all_exits = []
+		exits = set()
+
+		for level in range(len(self.levels)):
+			all_exits.extend([e for e in self.objects[level] if e["art"].split("/")[1] == "misc" and "exit" in e["art"].split("/")[2]])
+		
+			exit_packs = []
+			while len(all_exits) > 0: 
+				exit_tile = all_exits.pop(0)
+				x = exit_tile["position"]["x"]
+				y = exit_tile["position"]["y"]
+				exit_pack = [ exit_tile ]
+				add_new_tile = True
+				
+				while add_new_tile:
+					add_new_tile = False
+					remaining_exits = []
+					while len(all_exits) > 0: 
+						t1 = all_exits.pop(0)
+						x1 = t1["position"]["x"]
+						y1 = t1["position"]["y"]
+
+						adjacent = False
+						for t0 in exit_pack: 
+							x0 = t0["position"]["x"]
+							y0 = t0["position"]["y"]
+							if abs(y1 - y0) <= 1 and abs(x1 - x0) <= 1 or abs(y1 - y0) + abs(x1 - x0) <= 6: 
+								# t1 is "adjacent" to some tile of exit_pack (distance max is 6 ?)
+								adjacent = True
+								break
+						if adjacent: 
+							exit_pack.append(t1)
+							add_new_tile = True
+						else: 
+							remaining_exits.append(t1)
+					all_exits = remaining_exits
+				exit_packs.append(exit_pack)
+
+			print("map %s - level %d" % (self.name, level))
+			for ep in exit_packs:
+				cx = sum([int(e["position"]["x"]) for e in ep])/len(ep)
+				cy = sum([int(e["position"]["x"]) for e in ep])/len(ep)
+				print("center:%d/%d - %s" % (cx, cy, ["%s/%s" % (e["position"]["x"], e["position"]["y"]) for e in ep]))
+
+		for e in all_exits: 
+			extra = e["extra"]
+			exits.add((extra["exitMapID"], extra["startingPosition"], extra["startingElevation"], extra["startingOrientation"]))
+
+		return exits
