@@ -163,6 +163,8 @@ class Record():
 			return
 
 		print("%sanalyze data for %s" % ("\t"*lvl, self.type))
+		print(self.flags)
+		print(self.raw_data)
 		#print(self.raw_data)
 		sub_records = prototypes[self.type]
 		#print(sub_records)

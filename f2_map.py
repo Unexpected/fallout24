@@ -1,10 +1,25 @@
+class Exit:
+	def __init__(self, from_map, from_level, from_x, from_y, to_map, to_level, to_x, to_y, to_dir): 
+		self.from_map = from_map
+		self.from_level = from_level
+		self.from_x = from_x
+		self.from_y = from_y
+		self.to_map = to_map
+		self.to_level = to_level
+		self.to_x = to_x
+		self.to_y = to_y
+		self.to_dir = to_dir
+		self.from_form_id = None
+		self.to_form_id = None
+
 class Map: 
 	def __init__(self, json_data): 
 		self.data = json_data
 		self.name = self.data["name"]
 		self.map_id = self.data["mapID"]
 		self.levels = self.data["levels"]
-
+		self.cell_ids = dict()
+		self.form_ids = dict()
 		self.tiles = dict()
 		self.objects = dict()
 		self.floor = dict()
@@ -17,6 +32,7 @@ class Map:
 			self.floor[level] = self.tiles[level]["floor"]
 			self.roof[level] = self.tiles[level]["roof"]
 		
+		self.exits = set()
 		self.entrances = dict()
 		
 	def __str__(self): 
@@ -26,6 +42,10 @@ class Map:
 		if level not in self.entrances: 
 			return set()
 		return self.entrances[level]
+
+	def get_id(self, level):
+		self.form_ids[level] += 1
+		return self.form_ids[level]
 
 	def get_floor_tiles(self, level): 
 		x_min, y_min, x_max, y_max = self.get_map_bounds(level)
@@ -206,53 +226,39 @@ class Map:
 		
 		return x_min, y_min, width, height
 
+	def hex_to_tile(self, x, y): 
+		y = 0.5 * y
+		if x % 2 != 0: 
+			y -= 0.25
+		x = 0.5 * x
+		return x, y
+
 	def get_exits(self): 
 		all_exits = []
-		exits = set()
 
 		for level in range(len(self.levels)):
-			all_exits.extend([e for e in self.objects[level] if e["art"].split("/")[1] == "misc" and "exit" in e["art"].split("/")[2]])
+			all_exits = [e for e in self.objects[level] if e["art"].split("/")[1] == "misc" and "exit" in e["art"].split("/")[2]]
 		
-			exit_packs = []
-			while len(all_exits) > 0: 
-				exit_tile = all_exits.pop(0)
-				x = exit_tile["position"]["x"]
-				y = exit_tile["position"]["y"]
-				exit_pack = [ exit_tile ]
-				add_new_tile = True
+			exit_packs = dict()
+			for e in all_exits: 
+				x = e["position"]["x"]
+				y = e["position"]["y"]
+
+				extra = e["extra"]
+				ex = (extra["exitMapID"], extra["startingElevation"], extra["startingPosition"] % 200, extra["startingPosition"] // 200, extra["startingOrientation"])
+				if not ex in exit_packs: 
+					exit_packs[ex] = []
+				exit_packs[ex].append((x, y))
+
+			for target, ep in exit_packs.items():
+				cx = sum([int(e[0]) for e in ep])/len(ep)
+				cy = sum([int(e[1]) for e in ep])/len(ep)
+
+				(to_map, to_level, to_x, to_y, to_dir) = target
+				cx, cy = self.hex_to_tile(cx, cy)
+				to_x, to_y = self.hex_to_tile(to_x, to_y)
 				
-				while add_new_tile:
-					add_new_tile = False
-					remaining_exits = []
-					while len(all_exits) > 0: 
-						t1 = all_exits.pop(0)
-						x1 = t1["position"]["x"]
-						y1 = t1["position"]["y"]
+				exit = Exit(self.map_id, level, cx, cy, to_map, to_level, to_x, to_y, to_dir)
+				self.exits.add(exit)
 
-						adjacent = False
-						for t0 in exit_pack: 
-							x0 = t0["position"]["x"]
-							y0 = t0["position"]["y"]
-							if abs(y1 - y0) <= 1 and abs(x1 - x0) <= 1 or abs(y1 - y0) + abs(x1 - x0) <= 6: 
-								# t1 is "adjacent" to some tile of exit_pack (distance max is 6 ?)
-								adjacent = True
-								break
-						if adjacent: 
-							exit_pack.append(t1)
-							add_new_tile = True
-						else: 
-							remaining_exits.append(t1)
-					all_exits = remaining_exits
-				exit_packs.append(exit_pack)
-
-			print("map %s - level %d" % (self.name, level))
-			for ep in exit_packs:
-				cx = sum([int(e["position"]["x"]) for e in ep])/len(ep)
-				cy = sum([int(e["position"]["x"]) for e in ep])/len(ep)
-				print("center:%d/%d - %s" % (cx, cy, ["%s/%s" % (e["position"]["x"], e["position"]["y"]) for e in ep]))
-
-		for e in all_exits: 
-			extra = e["extra"]
-			exits.add((extra["exitMapID"], extra["startingPosition"], extra["startingElevation"], extra["startingOrientation"]))
-
-		return exits
+		return self.exits

@@ -53,17 +53,14 @@ def get_map_files(map_name, F2_DATA_DIR):
 		
 	return map, map_images
 
-BASE_ID = 33558500
-def get_id(): 
-	global BASE_ID
-	BASE_ID += 1
-	return BASE_ID
-	
-def get_raw_header(type, data_size, flags, id = None): 
+def get_position_data(x, y, z, rx, ry, rz): 
+	return struct.pack("f", x) + struct.pack("f", y) + struct.pack("f", z) + struct.pack("f", rx) + struct.pack("f", ry) + struct.pack("f", rz)
+
+def get_raw_header(type, data_size, flags, id): 
 	raw_header = type.encode("utf-8") # type 
 	raw_header += struct.pack("I", data_size) # data_size
 	raw_header += struct.pack("I", flags) # flags
-	raw_header += struct.pack("I", id if id else get_id()) # id
+	raw_header += struct.pack("I", id) # id
 	raw_header += struct.pack("I", 0) # rev
 	raw_header += struct.pack("H", 131) # version
 	raw_header += struct.pack("H", 0) # rev2
@@ -79,8 +76,60 @@ def get_tes4_header(data_size):
 	raw_header += struct.pack("H", 0) # rev2
 	return raw_header
 
-	
-def get_refr_raw_data(map_name, floor_tiles, objs, v_walls, h_walls, entrances): 
+def get_perm_refr_raw_data(map, level, map_name, entrances, exits): 
+	raw_data = b''
+
+	coc_present = False
+	for exit in entrances: 
+		if not coc_present:
+			edid = "coc_%s" % (map_name)
+			# REFR is : 
+			# EDID / NAME / DATA 
+			refr = "EDID".encode("utf-8") + struct.pack("H", len(edid)) + edid.encode("utf-8")
+			refr += "NAME".encode("utf-8") + struct.pack("H", 4) + struct.pack("I", 50)
+			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", exit.to_x*MAP_SIZE_FACTOR) + struct.pack("f", exit.to_y*MAP_SIZE_FACTOR) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0)
+
+			refr_header = get_raw_header("REFR", len(refr), 0, map.cell_ids[level] + 1)
+			raw_data += (refr_header + refr)
+			coc_present = True
+
+		# EDID \x14\x00 Entrance_from_other\x00
+		# NAME\x04\x00hJ\x04\x00
+		# XTEL $\x00 \xf2\x1e\x00\x02 
+		# 	(pos)	 h\x80\x9aD D\x9bG\xc4 \x00\x00\x80\xb8 \x00\x00\x00\x00 \x00\x00\x00\x00 \x00\x00\x00\x00 
+		# 	(flags)	 \x00\x00\x00\x00 \x00\x00\x00\x00
+		# DATA \x18\x00 \x82\xc2\xceC \x805\xc3@ \x00\x00\x00\x00 \x00\x00\x00\x00 \x00\x00\x00\x00 \x00\x00\x00\x00'
+
+		if exit.to_level != level: 
+			continue
+		# for each entrance: one invisible door
+		edid = "Entrance_from_%d_%d_to_%d" % (exit.from_map, exit.from_level, exit.to_form_id)
+		refr = "EDID".encode("utf-8") + struct.pack("H", len(edid)) + edid.encode("utf-8")
+		refr += "NAME".encode("utf-8") + struct.pack("H", 4) + struct.pack("I", 281192)
+		refr += "XTEL".encode("utf-8") + struct.pack("H", 36) + struct.pack("I", exit.from_form_id) + get_position_data(exit.from_x*MAP_SIZE_FACTOR, exit.from_y*MAP_SIZE_FACTOR, 0, 0, 0, 0) + struct.pack("I", 1) + struct.pack("I", 0)
+		refr += "DATA".encode("utf-8") + struct.pack("H", 24) + get_position_data(exit.to_x*MAP_SIZE_FACTOR, exit.to_y*MAP_SIZE_FACTOR, 0, 0, 0, 0)
+
+		refr_header = get_raw_header("REFR", len(refr), 1024, exit.to_form_id)
+		raw_data += (refr_header + refr)
+
+	for exit in exits: 
+		if exit.from_level != level: 
+			continue
+		edid = "Exit_to_%d_%d_from_%d" % (exit.to_map, exit.to_level, exit.from_form_id)
+		# REFR is : 
+		# EDID / NAME / DATA 
+		refr = "EDID".encode("utf-8") + struct.pack("H", len(edid)) + edid.encode("utf-8")
+		refr += "NAME".encode("utf-8") + struct.pack("H", 4) + struct.pack("I", 126327)
+		refr += "XTEL".encode("utf-8") + struct.pack("H", 36) + struct.pack("I", exit.to_form_id) + get_position_data(exit.to_x*MAP_SIZE_FACTOR, exit.to_y*MAP_SIZE_FACTOR, 0, 0, 0, 0) + struct.pack("I", 1) + struct.pack("I", 0)
+		refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.25)
+		refr += "DATA".encode("utf-8") + struct.pack("H", 24) + get_position_data(exit.from_x*MAP_SIZE_FACTOR, exit.from_y*MAP_SIZE_FACTOR, 0, 0, 0, 0)
+
+		refr_header = get_raw_header("REFR", len(refr), 1024, exit.from_form_id)
+		raw_data += (refr_header + refr)
+
+	return raw_data
+
+def get_temp_refr_raw_data(map, level, map_name, floor_tiles, objs, v_walls, h_walls): 
 	raw_data = b''
 	for (x, y, tile) in floor_tiles: 
 		if tile in TILES: 
@@ -94,36 +143,9 @@ def get_refr_raw_data(map_name, floor_tiles, objs, v_walls, h_walls, entrances):
 		# NAME(4) + EDID(2+4) + DATA(4)+data_size(2) + x(4) + y(4) + z(4) + rx(4) + ry(4) + rz(4)
 		refr = refr[:16] + struct.pack("f", x*MAP_SIZE_FACTOR) + struct.pack("f", y*MAP_SIZE_FACTOR) + refr[24:]
 
-		refr_header = get_raw_header("REFR", len(refr), 0)
+		refr_header = get_raw_header("REFR", len(refr), 0, map.get_id(level))
 		raw_data += (refr_header + refr)
 		#print("%d/%d %s" % (x, y, refr))
-
-	for (x, y, dir) in entrances: 
-		edid = "coc_%s" % (map_name)
-		eid += 1
-		# REFR is : 
-		# EDID / NAME / DATA 
-		refr = "EDID".encode("utf-8") + struct.pack("H", len(edid)) + edid.encode("utf-8")
-		refr += "NAME".encode("utf-8") + struct.pack("H", 4) + struct.pack("I", 50)
-		refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*MAP_SIZE_FACTOR) + struct.pack("f", y*MAP_SIZE_FACTOR) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0)
-
-		refr_header = get_raw_header("REFR", len(refr), 0)
-		raw_data += (refr_header + refr)
-
-		break  # Only one COC for each cell ?? 
-
-	eid = 0
-	for (x, y, dir) in entrances: 
-		edid = "Entrance_%d" % (eid)
-		eid += 1
-		# REFR is : 
-		# EDID / NAME / DATA 
-		refr = "EDID".encode("utf-8") + struct.pack("H", len(edid)) + edid.encode("utf-8")
-		refr += "NAME".encode("utf-8") + struct.pack("H", 4) + struct.pack("I", 126327)
-		refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*MAP_SIZE_FACTOR) + struct.pack("f", y*MAP_SIZE_FACTOR) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0)
-
-		refr_header = get_raw_header("REFR", len(refr), 0)
-		raw_data += (refr_header + refr)
 
 	types_to_do = dict()
 	for (x, y, type, object) in objs: 
@@ -159,7 +181,7 @@ def get_refr_raw_data(map_name, floor_tiles, objs, v_walls, h_walls, entrances):
 		# REFR is : 
 		# NAME(4) + EDID(2+4) + DATA(4)+data_size(2) + x(4) + y(4) + z(4) + rx(4) + ry(4) + rz(4)
 		refr = refr[:6] + struct.pack("I", edid) + refr[10:16] + struct.pack("f", x*MAP_SIZE_FACTOR) + struct.pack("f", y*MAP_SIZE_FACTOR) + struct.pack("f", z) + refr[28:]
-		refr_header = get_raw_header("REFR", len(refr), 0)
+		refr_header = get_raw_header("REFR", len(refr), 0, map.get_id(level))
 		raw_data += (refr_header + refr)
 		#print("%d/%d %s" % (x, y, refr))
 	
@@ -182,7 +204,7 @@ def get_refr_raw_data(map_name, floor_tiles, objs, v_walls, h_walls, entrances):
 			refr = refr[:6] + struct.pack("I", edid)
 			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.25)
 			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*MAP_SIZE_FACTOR + 30) + struct.pack("f", y*MAP_SIZE_FACTOR) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0)
-			refr_header = get_raw_header("REFR", len(refr), 0)
+			refr_header = get_raw_header("REFR", len(refr), 0, map.get_id(level))
 			raw_data += (refr_header + refr)
 
 			with open("raw/REFR/2011474", "rb") as raw_base_file: 
@@ -191,7 +213,7 @@ def get_refr_raw_data(map_name, floor_tiles, objs, v_walls, h_walls, entrances):
 			refr = refr[:6] + struct.pack("I", edid)
 			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.25)
 			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*MAP_SIZE_FACTOR - 30) + struct.pack("f", y*MAP_SIZE_FACTOR) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(180))
-			refr_header = get_raw_header("REFR", len(refr), 0)
+			refr_header = get_raw_header("REFR", len(refr), 0, map.get_id(level))
 			raw_data += (refr_header + refr)
 
 
@@ -215,7 +237,7 @@ def get_refr_raw_data(map_name, floor_tiles, objs, v_walls, h_walls, entrances):
 			refr = refr[:6] + struct.pack("I", edid)
 			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.25)
 			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*MAP_SIZE_FACTOR) + struct.pack("f", y*MAP_SIZE_FACTOR) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(90))
-			refr_header = get_raw_header("REFR", len(refr), 0)
+			refr_header = get_raw_header("REFR", len(refr), 0, map.get_id(level))
 			raw_data += (refr_header + refr)
 
 			with open("raw/REFR/2011474", "rb") as raw_base_file: 
@@ -224,7 +246,7 @@ def get_refr_raw_data(map_name, floor_tiles, objs, v_walls, h_walls, entrances):
 			refr = refr[:6] + struct.pack("I", edid)
 			refr += "XSCL".encode("utf-8") + struct.pack("H", 4) + struct.pack("f", 0.25)
 			refr += "DATA".encode("utf-8") + struct.pack("H", 24) + struct.pack("f", x*MAP_SIZE_FACTOR) + struct.pack("f", y*MAP_SIZE_FACTOR+64) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", 0) + struct.pack("f", math.radians(270))
-			refr_header = get_raw_header("REFR", len(refr), 0)
+			refr_header = get_raw_header("REFR", len(refr), 0, map.get_id(level))
 			raw_data += (refr_header + refr)
 
 	return raw_data
@@ -260,7 +282,7 @@ def get_raw_grup_header(data_size, label, group_type):
 	raw_header += struct.pack("I", data_size + 24) # data_size of grup includes headers
 	if group_type == 0: 
 		raw_header += label.encode("utf-8")
-	elif group_type in [2, 3, 6, 9]: 
+	elif group_type in [2, 3, 6, 8, 9]: 
 		raw_header += struct.pack("I", label) # long, block number
 	else: 
 		print("GRUP type not managed: %d" % group_type) 
@@ -276,22 +298,29 @@ def get_map_cell_sub_block(map, number, level):
 	objs = map.get_objects(level)
 	v_walls, h_walls = map.get_walls(level)
 	entrances = map.get_entrances(level)
+	exits = map.exits
 	map_name = map.name[:-4] + "_" + str(level)
+	print("map %s - %d entrances - %d exits" % (map_name, len(entrances), len(exits)))
 
 	#x_min, y_min, width, height = map.get_map_size()
 
-	cell_id = get_id()
+	cell_id = map.cell_ids[level]
 	# refr_data									analyze data for REFR                                               
-	refr_data = get_refr_raw_data(map_name, floor_tiles, objs, v_walls, h_walls, entrances)
+	perm_refr_data = get_perm_refr_raw_data(map, level, map_name, entrances, exits)
+	temp_refr_data = get_temp_refr_raw_data(map, level, map_name, floor_tiles, objs, v_walls, h_walls)
+
+	# perm_grup								analyze GRUP of size 2280 - label b'\x99\x0f\x00\x02' - type 8              
+	perm_grup_header = get_raw_grup_header(len(perm_refr_data), cell_id, 8)
+	perm_grup = perm_grup_header + perm_refr_data
 
 	# temp_grup								analyze GRUP of size 2280 - label b'\x99\x0f\x00\x02' - type 9              
-	temp_grup_header = get_raw_grup_header(len(refr_data), cell_id, 9)
-	temp_grup = temp_grup_header + refr_data
+	temp_grup_header = get_raw_grup_header(len(temp_refr_data), cell_id, 9)
+	temp_grup = temp_grup_header + temp_refr_data
 
 	#									 CELL children of CELL ID 33558425                                                  
 	# cell_children_grup			analyze GRUP of size 2304 - label 33558425 - type 6                                 
-	cell_children_grup_header = get_raw_grup_header(len(temp_grup), cell_id, 6)
-	cell_children = cell_children_grup_header + temp_grup
+	cell_children_grup_header = get_raw_grup_header(len(perm_grup) + len(temp_grup), cell_id, 6)
+	cell_children = cell_children_grup_header + perm_grup + temp_grup
 
 	# cell_record					analyze data for CELL                                                               
 	cell_record_data = get_cell_raw_data(cell_id, map_name)
@@ -337,24 +366,32 @@ def main():
 				continue
 			maps[map.map_id] = map
 
+	base_id = 33558500
+	for map in maps.values():
+		for level in range(len(map.levels)):
+			map.cell_ids[level] = base_id
+			map.form_ids[level] = base_id + 2
+			base_id += 50000
+
 	for map in maps.values(): 
 		exits = map.get_exits()
-		for (map_id, pos, map_level, direction) in exits: 
-			x = pos % 200
-			y = pos // 200
-			y = 0.5 * y
-			if x % 2 != 0: 
-				y -= 0.25
-			x = 0.5 * x
-			if not map_level in maps[map_id].entrances: 
-				maps[map_id].entrances[map_level] = set()
-			maps[map_id].entrances[map_level].add((x, y, direction))
+		for exit in exits: 
+			exit.from_form_id = map.get_id(exit.from_level)
+
+			# for each entrance: one invisible door on target map
+			target_map_id = exit.to_map
+			target_level = exit.to_level
+			exit.to_form_id = maps[target_map_id].get_id(exit.to_level)
+			if not target_level in maps[target_map_id].entrances: 
+				maps[target_map_id].entrances[target_level] = set()
+			maps[target_map_id].entrances[target_level].add(exit)
 
 	for map in maps.values(): 
 		print("map %d, entrances: %s" % (map.map_id, map.entrances))
 	
 	sub_blocks = b''
 	number = 0
+
 	for map in maps.values():
 		for level in range(len(map.levels)):
 			sub_blocks += get_map_cell_sub_block(map, number, level)
