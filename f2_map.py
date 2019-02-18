@@ -62,6 +62,21 @@ class Map:
 					floor_tiles.append((x, y, tile))
 		return floor_tiles
 	
+	def get_roof_tiles(self, level): 
+		x_min, y_min, x_max, y_max = self.get_map_bounds(level)
+		# return tuples: (x, y, tile)
+		# do not return grid000 tiles ?? 
+		roof_tiles = []
+		TILES_SIZE = 100
+		for y in range(TILES_SIZE): 
+			for x in range(TILES_SIZE): 
+				if x < x_min - 2 or x > x_max + 2 or y < y_min - 2 or y > y_max + 2: 
+					continue
+				tile = self.roof[level][y][x]
+				if tile != "grid000":
+					roof_tiles.append((x, y, tile))
+		return roof_tiles
+
 	def get_objects(self, level): 
 		# return tuples: (x, y, tile)
 		# do not return grid000 tiles ?? 

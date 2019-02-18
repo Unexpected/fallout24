@@ -24,6 +24,8 @@ OBJECTS["BldBrickSmFlrPlatQuarter01"] = 575511
 
 OBJECTS["BldWoodBBGWall01"] = 486165
 
+OBJECTS["MetalRoof11x1Mid01"] = 947063
+
 TILES = dict()
 TILES["edg5003"] = "BldWoodBSmFlrOnly01"
 TILES["edg5000"] = "BldWoodBSmFlrOnly01"
@@ -129,7 +131,7 @@ def get_perm_refr_raw_data(map, level, map_name, entrances, exits):
 
 	return raw_data
 
-def get_temp_refr_raw_data(map, level, map_name, floor_tiles, objs, v_walls, h_walls): 
+def get_temp_refr_raw_data(map, level, map_name, floor_tiles, roof_tiles, objs, v_walls, h_walls): 
 	raw_data = b''
 	for (x, y, tile) in floor_tiles: 
 		if tile in TILES: 
@@ -146,6 +148,17 @@ def get_temp_refr_raw_data(map, level, map_name, floor_tiles, objs, v_walls, h_w
 		refr_header = get_raw_header("REFR", len(refr), 0, map.get_id(level))
 		raw_data += (refr_header + refr)
 		#print("%d/%d %s" % (x, y, refr))
+
+	for (x, y, tile) in roof_tiles: 
+		# REFR is : 
+		# NAME(4) + DATA(4)+data_size(2) + x(4) + y(4) + z(4) + rx(4) + ry(4) + rz(4)
+		refr = "NAME".encode("utf-8") + struct.pack("H", 4) + struct.pack("I", OBJECTS["MetalRoof11x1Mid01"])
+		refr += "DATA".encode("utf-8") + struct.pack("H", 24) + get_position_data((x+5)*MAP_SIZE_FACTOR, (y-1)*MAP_SIZE_FACTOR, 2*MAP_SIZE_FACTOR, 0, 0, 0)
+
+		refr_header = get_raw_header("REFR", len(refr), 0, map.get_id(level))
+		raw_data += (refr_header + refr)
+		#print("%d/%d %s" % (x, y, refr))
+		
 
 	types_to_do = dict()
 	for (x, y, type, object) in objs: 
@@ -295,6 +308,7 @@ def get_raw_grup_header(data_size, label, group_type):
 
 def get_map_cell_sub_block(map, number, level): 
 	floor_tiles = map.get_floor_tiles(level)
+	roof_tiles = map.get_roof_tiles(level)
 	objs = map.get_objects(level)
 	v_walls, h_walls = map.get_walls(level)
 	entrances = map.get_entrances(level)
@@ -307,7 +321,7 @@ def get_map_cell_sub_block(map, number, level):
 	cell_id = map.cell_ids[level]
 	# refr_data									analyze data for REFR                                               
 	perm_refr_data = get_perm_refr_raw_data(map, level, map_name, entrances, exits)
-	temp_refr_data = get_temp_refr_raw_data(map, level, map_name, floor_tiles, objs, v_walls, h_walls)
+	temp_refr_data = get_temp_refr_raw_data(map, level, map_name, floor_tiles, roof_tiles, objs, v_walls, h_walls)
 
 	# perm_grup								analyze GRUP of size 2280 - label b'\x99\x0f\x00\x02' - type 8              
 	perm_grup_header = get_raw_grup_header(len(perm_refr_data), cell_id, 8)
@@ -388,7 +402,11 @@ def main():
 
 	for map in maps.values(): 
 		print("map %d, entrances: %s" % (map.map_id, map.entrances))
-	
+		for level in range(len(map.levels)):
+			if level in map.entrances:
+				for exit in map.entrances[level]: 
+					print("\tlevel %d - entrance dir: %s" % (level, exit.to_dir))
+		
 	sub_blocks = b''
 	number = 0
 
