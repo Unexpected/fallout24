@@ -1,0 +1,11 @@
+PROCEDURE=1
+SEMICOLON=2
+IDENTIFIER=3
+WS=4
+NL=5
+NonCode=6
+Directive=7
+BlockComment=8
+LineComment=9
+'procedure'=1
+';'=2
