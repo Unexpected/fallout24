@@ -6,14 +6,14 @@ from grammar.SSTListener import SSTListener
 
 class MyListener(SSTListener):
 	# Exit a parse tree produced by SSTParser#sst.
-	def enterSst(self, ctx:SSTParser.SstContext):
-		print("sst %s" % ctx)
-
 	def enterProcedureDeclaration(self, ctx:SSTParser.ProcedureDeclarationContext):
-		print("procDec %s" % ctx.IDENTIFIER())
+		pass #print("procDec %s" % ctx.Identifier())
+	
+	def enterVariableDeclaration(self, ctx:SSTParser.VariableDeclarationContext):
+		pass #print("varDec %s := %s" % (ctx.Identifier(), ctx.initializer()))
 		
-	def enterDeclaration(self, ctx:SSTParser.SstContext):
-		print("declaration %s" % ctx)
+	def enterDirective(self, ctx:SSTParser.DirectiveContext):
+		pass #print("directive %s %s %s" % (ctx.children[0], ctx.children[1], "" if len(ctx.children) < 3 else ctx.children[2]))
 
 
 def main(argv):
