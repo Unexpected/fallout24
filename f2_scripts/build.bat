@@ -1,0 +1,1 @@
+java -jar lib\antlr-4.7.2-complete.jar -Dlanguage=Python3 -o grammar grammar/SST.g4
