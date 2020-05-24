@@ -27,7 +27,7 @@ class Context:
 
         files are processed with the process_file method
 
-        each time a files includes another one, the processing is "paused" 
+        each time a files includes another one, the processing is "paused"
         and included file is processed immediately """
         todo = self.look_for_files(src_dir)
 
@@ -36,22 +36,55 @@ class Context:
             file_id = self.get_id(full_file_name)
 
             self.process_file(file_id, full_file_name)
-            break
+            # break
             self.done.add(file_id)
 
     def get_next_stop_pos(self, text):
         try:
             eol_pos = text.index("\n")
             while text[:eol_pos].strip()[-1] == "\\":
-                #print("was a \\ before an eol : %s" % text[:eol_pos])
+                # print("was a \\ before an eol : %s" % text[:eol_pos])
                 eol_pos = text[eol_pos+1:].index("\n") + eol_pos + 1
         except ValueError:
             eol_pos = len(text) - 1
         return eol_pos
 
+    def update_macros(self, buffer, current_macros):
+        breakers = [" ", "(", ")", "\t", "\n", ",", ";"]
+        identifier = ""
+        pos = 0
+        buffer_len = len(buffer)
+
+        updated_buffer = ""
+        while pos < buffer_len:
+            next_char = buffer[pos]
+            if next_char in breakers:
+                if identifier.upper() in current_macros:
+                    ttype, value = current_macros[identifier.upper()]
+                    if ttype == "STATIC":
+                        updated_buffer += value
+                        #print("apply %s macro for %s" % (ttype, identifier))
+                    elif ttype == "FUNCTION":
+                        if next_char != "(":
+                            print("apply function on ??? %s " %
+                                  (identifier + next_char))
+                        else:
+                            # find closing parenthesis
+                            pass
+
+                else:
+                    updated_buffer += identifier
+                updated_buffer += next_char
+                identifier = ""
+            else:
+                identifier += next_char
+            pos += 1
+
+        return updated_buffer
+
     def process_file(self, file_id, file_name):
         if file_id not in self.loaded_files:
-            with open(file_name, 'r') as file:
+            with open(file_name, 'r', encoding="utf-8") as file:
                 self.loaded_files[file_id] = file.read()
                 self.processed_files[file_id] = ""
                 self.macros[file_id] = dict()
@@ -76,7 +109,7 @@ class Context:
                 next_char = current_file_text[current_pos + 1]
                 if next_char == "*" or next_char == "/":
                     # next is comment, check current buffer
-                    #print("processed: %s" % buffer)
+                    # print("processed: %s" % buffer)
                     processed_text += buffer
                     buffer = ""
 
@@ -98,7 +131,7 @@ class Context:
                         break
                     # print("remove comment line from %d to %d: %s" % (
                     #    current_pos, eoc_pos, current_file_text[current_pos:current_pos+eol_pos + 1]))
-                    current_pos += eol_pos + 1
+                    current_pos += eol_pos
                     continue
 
             else:
@@ -115,6 +148,9 @@ class Context:
         processed_text = ""
         text_length = len(current_file_text)
         current_pos = 0
+
+        in_def_block = False
+        in_def_bool = False
 
         while current_pos < text_length:
             # print("%s %d" % (file_id, current_pos))
@@ -133,8 +169,8 @@ class Context:
                     include_id = self.get_id(include_relative)
                     include_path = file_name[:file_name.rindex(
                         "/")] + "/" + include_relative
-                    #print("include file ***%s***" % include_relative)
-                    #print("include file path is %s" % include_path)
+                    # print("include file ***%s***" % include_relative)
+                    # print("include file path is %s" % include_path)
 
                     self.process_file(include_id, include_path)
                     include_text = self.processed_files[include_id]
@@ -148,36 +184,51 @@ class Context:
                         current_file_text[current_pos:]) + current_pos
 
                     macro = current_file_text[current_pos +
-                                              7:eol_pos].strip()
+                                              7:eol_pos].strip().upper()
 
+                    key = macro
+                    value = None
+                    # if "TOWN" in key:
+                    #    print("define: %s" % key)
                     if " " in macro:
                         sep_index = macro.index(" ")
                         if "\t" in macro[:sep_index]:
                             sep_index = macro.index("\t")
                         key = macro[:sep_index].strip()
                         value = macro[sep_index:].strip()
-                        current_macros[key] = value
-                        #print("define a macro %s --> %s" % (key, value))
+                        # print("define a macro %s --> %s" % (key, value))
                     elif "\t" in macro:
                         sep_index = macro.index("\t")
                         key = macro[:sep_index].strip()
                         value = macro[sep_index:].strip()
-                        current_macros[key] = value
-                        #print("define a macro %s --> %s" % (key, value))
+                        # print("define a macro %s --> %s" % (key, value))
 
-                    else:
-                        current_macros[macro] = None
-                        #print("define a value %s" % (macro))
+                    type = "DEFINE"
+                    if value != None:
+                        type = "STATIC"
+                        if "(" in key and ")" in key:
+                            type = "FUNCTION"
+
+                    current_macros[key] = (type, value)
+                    # print("define a value %s" % (macro))
                     current_pos = eol_pos
                     continue
-                elif current_file_text[current_pos:current_pos+7] == "#ifndef":
+                elif current_file_text[current_pos:current_pos+6] == "#ifdef":
+                    in_def_block = True
+
                     eol_pos = self.get_next_stop_pos(
                         current_file_text[current_pos:]) + current_pos
+
+                    key = current_file_text[current_pos +
+                                            6:eol_pos].strip().upper()
+                    in_def_bool = key in current_macros and current_macros[key][0] == "DEFINE"
+                    #print("check for %s in macros: %s " % (key, in_def_bool))
+
                     # print("skipping %s" %
                     #      current_file_text[current_pos:eol_pos])
                     current_pos = eol_pos
                     continue
-                elif current_file_text[current_pos:current_pos+6] == "#ifdef":
+                elif current_file_text[current_pos:current_pos+7] == "#ifndef":
                     eol_pos = self.get_next_stop_pos(
                         current_file_text[current_pos:]) + current_pos
                     # print("skipping %s" %
@@ -201,17 +252,19 @@ class Context:
             else:
                 buffer += new_char
                 if new_char == "\n":
+
+                    # replace macros
+                    buffer = self.update_macros(buffer, current_macros)
+
                     # if buffer != "\n":
                     processed_text += buffer
                     buffer = ""
             current_pos += 1
-            if "\\" in processed_text:
-                print("was in %s at %d" % (file_id, current_pos))
-                break
 
         self.processed_files[file_id] = processed_text
+        # with open("abbey_out.txt", "w") as outfile:
+        #    outfile.write(processed_text)
 
-        print(len(current_macros), current_macros.keys())
         # load include in macro context
         # for each #define macro, add to macro context map
         # for each defined pattern, replace
