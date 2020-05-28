@@ -28,7 +28,11 @@ class Context:
         files are processed with the process_file method
 
         each time a files includes another one, the processing is "paused"
-        and included file is processed immediately """
+        and included file is processed immediately, then processed file is included into original file 
+
+        processed files are cached in self.processed_file dict. 
+        this is wrong because macros are not the same in each include, but this will do for now
+        """
         todo = self.look_for_files(src_dir)
 
         while len(todo) > 0:
@@ -36,6 +40,13 @@ class Context:
             file_id = self.get_id(full_file_name)
 
             self.process_file(file_id, full_file_name)
+            target_file_dir = target_dir + \
+                "/".join(full_file_name.split("/")[1:-1])
+            os.makedirs(target_file_dir, exist_ok=True)
+
+            with open("%s/%s" % (target_file_dir, file_id), "w") as processed_file:
+                processed_file.write(self.processed_files[file_id])
+
             # break
             self.done.add(file_id)
 
@@ -55,10 +66,14 @@ class Context:
         pos = 0
         buffer_len = len(buffer)
 
+        in_string = False
         updated_buffer = ""
         while pos < buffer_len:
             next_char = buffer[pos]
-            if next_char in breakers:
+            if next_char == "\"":
+                in_string = not in_string
+                updated_buffer += "\""
+            elif not in_string and next_char in breakers:
                 if identifier.upper() in current_macros:
                     ttype, value = current_macros[identifier.upper()]
                     if ttype == "STATIC":
@@ -66,10 +81,10 @@ class Context:
                         #print("apply %s macro for %s" % (ttype, identifier))
                     elif ttype == "FUNCTION":
                         if next_char != "(":
+                            # find closing parenthesis, split parameters, apply macros "recursively" ?
                             print("apply function on ??? %s " %
                                   (identifier + next_char))
                         else:
-                            # find closing parenthesis
                             pass
 
                 else:
